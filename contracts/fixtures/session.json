@@ -1,0 +1,13 @@
+{
+  "session_id": "s_9a13",
+  "started_at": "2026-08-28T17:03:29Z",
+  "meta": {
+    "caller_id": "+919812345678",
+    "known_contact": false,
+    "channel": "voip"
+  },
+  "peak_risk": 78,
+  "final_band": "HOLD",
+  "frames": 47,
+  "abstained": 3
+}

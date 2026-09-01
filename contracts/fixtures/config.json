@@ -1,0 +1,41 @@
+{
+  "bands": {
+    "WATCH": 30,
+    "VERIFY": 55,
+    "HOLD": 75
+  },
+  "fusion_weights": {
+    "neural": 0.45,
+    "codec": 0.3,
+    "trajectory": 0.25
+  },
+  "risk_weights": {
+    "acoustic": 0.7,
+    "context": 0.3
+  },
+  "context_weights": {
+    "fri_tier": 0.3,
+    "cli_not_1600": 0.2,
+    "speaker_drift": 0.25,
+    "scam_keywords": 0.15,
+    "amount_tier": 0.1
+  },
+  "gate": {
+    "min_net_speech_s": 3.0,
+    "min_snr_db": 8.0,
+    "max_pkt_loss": 0.15
+  },
+  "smoothing": {
+    "ema_alpha": 0.3,
+    "persist_k": 5,
+    "persist_n": 8
+  },
+  "confidence_floor_for_hold": 0.6,
+  "intent_thresholds": {
+    "balance_enquiry": 95,
+    "transfer": 75,
+    "beneficiary_change": 65,
+    "credential_reset": 65,
+    "payout_redirect": 60
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "type": "alert",
+  "alert_id": "a_7f2c",
+  "seq": 42,
+  "risk": 78,
+  "band": "HOLD",
+  "action": "HOLD_TRANSACTION",
+  "recommendation": "Call back on the registered number ending 4417",
+  "ts": "2026-08-28T17:04:11Z"
+}

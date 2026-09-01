@@ -1,0 +1,287 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SatyaVaani contracts v1 (FROZEN)",
+  "version": "1.0.0",
+  "definitions": {
+    "Reason": {
+      "type": "object",
+      "required": [
+        "code",
+        "label",
+        "weight"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "weight": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "Quality": {
+      "type": "object",
+      "required": [
+        "net_speech_s",
+        "snr_db",
+        "pkt_loss",
+        "enhancement_detected"
+      ],
+      "properties": {
+        "net_speech_s": {
+          "type": "number"
+        },
+        "snr_db": {
+          "type": "number"
+        },
+        "pkt_loss": {
+          "type": "number"
+        },
+        "enhancement_detected": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Speaker": {
+      "type": "object",
+      "required": [
+        "enrolled"
+      ],
+      "properties": {
+        "enrolled": {
+          "type": "boolean"
+        },
+        "similarity": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "match": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "Score": {
+      "type": "object",
+      "required": [
+        "type",
+        "seq",
+        "t_ms",
+        "state"
+      ],
+      "properties": {
+        "type": {
+          "const": "score"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "t_ms": {
+          "type": "integer"
+        },
+        "state": {
+          "enum": [
+            "SCORED",
+            "ABSTAIN"
+          ]
+        },
+        "risk": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "band": {
+          "enum": [
+            "SAFE",
+            "WATCH",
+            "VERIFY",
+            "HOLD"
+          ]
+        },
+        "scores": {
+          "type": "object",
+          "properties": {
+            "synthetic": {
+              "type": "number"
+            },
+            "replay": {
+              "type": "number"
+            },
+            "speaker": {
+              "$ref": "#/definitions/Speaker"
+            }
+          }
+        },
+        "context": {
+          "type": "number"
+        },
+        "confidence": {
+          "type": "number"
+        },
+        "quality": {
+          "$ref": "#/definitions/Quality"
+        },
+        "detectors": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Reason"
+          }
+        },
+        "model_version": {
+          "type": "string"
+        },
+        "reason": {
+          "enum": [
+            "INSUFFICIENT_SPEECH",
+            "LOW_SNR",
+            "PACKET_LOSS",
+            "BUFFER_WARMING"
+          ]
+        },
+        "detail": {
+          "type": "string"
+        }
+      }
+    },
+    "Alert": {
+      "type": "object",
+      "required": [
+        "type",
+        "alert_id",
+        "risk",
+        "band",
+        "action"
+      ],
+      "properties": {
+        "type": {
+          "const": "alert"
+        },
+        "alert_id": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "risk": {
+          "type": "integer"
+        },
+        "band": {
+          "enum": [
+            "SAFE",
+            "WATCH",
+            "VERIFY",
+            "HOLD"
+          ]
+        },
+        "action": {
+          "enum": [
+            "NONE",
+            "FLAG",
+            "ADVISE_VERIFY",
+            "HOLD_TRANSACTION"
+          ]
+        },
+        "recommendation": {
+          "type": "string"
+        },
+        "ts": {
+          "type": "string"
+        }
+      }
+    },
+    "DetectorResult": {
+      "description": "ml/registry.py contract \u2014 the ONE seam between backend and ML",
+      "type": "object",
+      "required": [
+        "score",
+        "confidence",
+        "reasons",
+        "latency_ms"
+      ],
+      "properties": {
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "1 = synthetic"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Reason"
+          }
+        },
+        "latency_ms": {
+          "type": "number"
+        },
+        "abstain": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    }
+  },
+  "bands": {
+    "SAFE": [
+      0,
+      29
+    ],
+    "WATCH": [
+      30,
+      54
+    ],
+    "VERIFY": [
+      55,
+      74
+    ],
+    "HOLD": [
+      75,
+      100
+    ]
+  },
+  "audio": {
+    "sample_rate": 16000,
+    "channels": 1,
+    "dtype": "float32le",
+    "frame_samples": 16000,
+    "window_s": 4.0,
+    "hop_s": 1.0
+  },
+  "gate": {
+    "min_net_speech_s": 3.0,
+    "min_snr_db": 8.0,
+    "max_pkt_loss": 0.15,
+    "confidence_floor_for_hold": 0.6
+  },
+  "rest": {
+    "POST /api/sessions": "-> {session_id}",
+    "GET /api/sessions/{id}": "-> session + score timeline",
+    "POST /api/analyze": "multipart wav -> aggregated report",
+    "POST /api/enroll": "multipart wav + name -> {voiceprint_id}",
+    "GET /api/alerts?session_id=": "-> [Alert]",
+    "POST /api/alerts/{id}/override": "{reason} -> logged release",
+    "GET /api/metrics/model": "-> eval table from data/results.json",
+    "GET /api/config, PUT /api/config": "thresholds + fusion weights",
+    "GET /api/audit/verify": "-> {ok, length, broken_at}"
+  }
+}

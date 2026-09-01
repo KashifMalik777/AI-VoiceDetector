@@ -1,0 +1,48 @@
+{
+  "type": "score",
+  "seq": 42,
+  "t_ms": 42000,
+  "state": "SCORED",
+  "risk": 78,
+  "band": "HOLD",
+  "scores": {
+    "synthetic": 0.91,
+    "replay": 0.12,
+    "speaker": {
+      "enrolled": true,
+      "similarity": 0.31,
+      "match": false
+    }
+  },
+  "context": 0.44,
+  "confidence": 0.86,
+  "quality": {
+    "net_speech_s": 6.2,
+    "snr_db": 21.4,
+    "pkt_loss": 0.01,
+    "enhancement_detected": false
+  },
+  "detectors": {
+    "neural": 0.94,
+    "codec": 0.88,
+    "trajectory": 0.79
+  },
+  "reasons": [
+    {
+      "code": "CODEC_FINGERPRINT",
+      "label": "Neural codec signature consistent with vocoder resynthesis",
+      "weight": 0.34
+    },
+    {
+      "code": "SPEAKER_DRIFT",
+      "label": "Voice differs from enrolled reference (cos 0.31)",
+      "weight": 0.29
+    },
+    {
+      "code": "HF_ROLLOFF",
+      "label": "Energy collapses above 7.2 kHz",
+      "weight": 0.18
+    }
+  ],
+  "model_version": "stub-v0"
+}

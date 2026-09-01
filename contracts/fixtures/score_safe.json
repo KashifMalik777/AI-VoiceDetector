@@ -1,0 +1,48 @@
+{
+  "type": "score",
+  "seq": 12,
+  "t_ms": 12000,
+  "state": "SCORED",
+  "risk": 11,
+  "band": "SAFE",
+  "scores": {
+    "synthetic": 0.08,
+    "replay": 0.04,
+    "speaker": {
+      "enrolled": true,
+      "similarity": 0.88,
+      "match": true
+    }
+  },
+  "context": 0.05,
+  "confidence": 0.93,
+  "quality": {
+    "net_speech_s": 9.4,
+    "snr_db": 24.1,
+    "pkt_loss": 0.0,
+    "enhancement_detected": false
+  },
+  "detectors": {
+    "neural": 0.07,
+    "codec": 0.09,
+    "trajectory": 0.06
+  },
+  "reasons": [
+    {
+      "code": "BREATH_PRESENT",
+      "label": "Breath events detected at a natural rate",
+      "weight": 0.21
+    },
+    {
+      "code": "SPEAKER_MATCH",
+      "label": "Voice matches enrolled reference (cos 0.88)",
+      "weight": 0.44
+    },
+    {
+      "code": "NO_CODEC_ARTIFACT",
+      "label": "No neural-codec resynthesis signature",
+      "weight": 0.35
+    }
+  ],
+  "model_version": "stub-v0"
+}

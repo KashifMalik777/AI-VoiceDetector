@@ -1,0 +1,19 @@
+{
+  "device": "Windows-10-10.0.26200-SP0",
+  "python": "3.11.9",
+  "model_version": "xlsr-l7",
+  "stubs_active": [],
+  "iterations": 25,
+  "window_s": 4,
+  "mean_ms": 669.48,
+  "rtf": 0.1674,
+  "hop_headroom_ms": 330.5,
+  "per_stage_ms": {
+    "detector_neural": 591.13,
+    "detector_codec": 5.79,
+    "detector_trajectory": 66.12,
+    "gate": 0.54,
+    "features": 5.9
+  },
+  "verdict": "TIGHT \u2014 quantise to int8 now"
+}

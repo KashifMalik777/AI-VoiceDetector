@@ -1,0 +1,86 @@
+{
+  "device": "Windows-11-10.0.26200-SP0",
+  "cores": 32,
+  "window_s": 4.0,
+  "torch_all_cores_ms": 192.7,
+  "results": [
+    {
+      "model": "xlsr_l7_fp32.onnx",
+      "threads": 0,
+      "mean_ms": 158.2,
+      "rtf": 0.0395,
+      "size_mb": 405
+    },
+    {
+      "model": "xlsr_l7_fp32.onnx",
+      "threads": 1,
+      "mean_ms": 5271.5,
+      "rtf": 1.3179,
+      "size_mb": 405
+    },
+    {
+      "model": "xlsr_l7_fp32.onnx",
+      "threads": 2,
+      "mean_ms": 288.8,
+      "rtf": 0.0722,
+      "size_mb": 405
+    },
+    {
+      "model": "xlsr_l7_fp32.onnx",
+      "threads": 4,
+      "mean_ms": 601.5,
+      "rtf": 0.1504,
+      "size_mb": 405
+    },
+    {
+      "model": "xlsr_l7_fp32.onnx",
+      "threads": 8,
+      "mean_ms": 127.1,
+      "rtf": 0.0318,
+      "size_mb": 405
+    },
+    {
+      "model": "xlsr_l7_int8.onnx",
+      "threads": 0,
+      "mean_ms": 733.6,
+      "rtf": 0.1834,
+      "size_mb": 102
+    },
+    {
+      "model": "xlsr_l7_int8.onnx",
+      "threads": 1,
+      "mean_ms": 2661.8,
+      "rtf": 0.6654,
+      "size_mb": 102
+    },
+    {
+      "model": "xlsr_l7_int8.onnx",
+      "threads": 2,
+      "mean_ms": 1718.5,
+      "rtf": 0.4296,
+      "size_mb": 102
+    },
+    {
+      "model": "xlsr_l7_int8.onnx",
+      "threads": 4,
+      "mean_ms": 940.1,
+      "rtf": 0.235,
+      "size_mb": 102
+    },
+    {
+      "model": "xlsr_l7_int8.onnx",
+      "threads": 8,
+      "mean_ms": 734.9,
+      "rtf": 0.1837,
+      "size_mb": 102
+    }
+  ],
+  "best": {
+    "model": "xlsr_l7_fp32.onnx",
+    "threads": 8,
+    "mean_ms": 127.1,
+    "rtf": 0.0318,
+    "size_mb": 405
+  },
+  "neural_every_n_hops": 1
+}

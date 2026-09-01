@@ -1,0 +1,39 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+node_modules/
+dist/
+*.db
+*.sqlite3
+.env
+.DS_Store
+data/datasets/
+ml/onnx/*.onnx
+attacks/out/
+*.wav
+*.flac
+*.m4a
+*.mp3
+*.ogg
+# dataset audio + personal recordings -- regenerable, never commit
+attacks/genuine/
+attacks/refs/
+attacks/refs_demo_only/
+!attacks/samples/*.wav
+
+# --- local demo / build artifacts ---
+frontend-legacy/
+*.tsbuildinfo
+*.zip
+
+# --- keep these: they are evidence, not build junk ---
+!data/results.json
+!data/rtf_bench.json
+!data/neural_sweep.json
+!data/probe_results.json
+!ml/onnx/model_card.json
+!ml/onnx/probe_head.npz
+
+# --- ONNX weights are 100-400 MB: too big for GitHub, regenerate with ---
+#     python ml/training/export_backbone.py

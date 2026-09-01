@@ -1,0 +1,26 @@
+# --- core (needed day 1, installs in seconds) ---
+fastapi>=0.111
+uvicorn[standard]>=0.30
+websockets>=12.0
+pydantic>=2.7
+sqlalchemy>=2.0
+numpy>=1.26
+scipy>=1.11
+python-multipart>=0.0.9
+soundfile>=0.12
+
+# --- ML (day 1 afternoon; heavier) ---
+onnxruntime>=1.18
+onnx>=1.16          # NOT pulled in by onnxruntime -- torch.onnx.export needs it
+lightgbm>=4.3
+librosa>=0.10
+transformers>=4.40
+# praat-parselmouth>=0.4
+
+# torch is installed separately (CPU wheel):
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+# --- day 2 (training only, on Colab/Kaggle not the demo laptop) ---
+# torch>=2.2
+# transformers>=4.40
+# speechbrain>=1.0

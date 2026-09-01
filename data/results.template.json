@@ -1,0 +1,91 @@
+{
+  "generated": null,
+  "model_version": null,
+  "note": "EMPTY ON PURPOSE. Fill from data/results.json once WE have measured. Never invent a cell.",
+  "rows": [
+    {
+      "condition": "ASVspoof 5 eval (in-domain)",
+      "eer": null,
+      "min_dcf": null,
+      "act_dcf": null,
+      "far_at_1_frr": null,
+      "abstain": null
+    },
+    {
+      "condition": "In-the-Wild (held out)",
+      "eer": null,
+      "min_dcf": null,
+      "act_dcf": null,
+      "far_at_1_frr": null,
+      "abstain": null
+    },
+    {
+      "condition": "Our clones, unseen generator",
+      "eer": null,
+      "min_dcf": null,
+      "act_dcf": null,
+      "far_at_1_frr": null,
+      "abstain": null
+    },
+    {
+      "condition": "8 kHz mu-law + packet loss",
+      "eer": null,
+      "min_dcf": null,
+      "act_dcf": null,
+      "far_at_1_frr": null,
+      "abstain": null
+    },
+    {
+      "condition": "Reverb RT60 0.9 s",
+      "eer": null,
+      "min_dcf": null,
+      "act_dcf": null,
+      "far_at_1_frr": null,
+      "abstain": null
+    },
+    {
+      "condition": "Noise-suppressed bona fide",
+      "eer": null,
+      "min_dcf": null,
+      "act_dcf": null,
+      "far_at_1_frr": null,
+      "abstain": null
+    },
+    {
+      "condition": "Seed-VC live conversion",
+      "eer": null,
+      "min_dcf": null,
+      "act_dcf": null,
+      "far_at_1_frr": null,
+      "abstain": null
+    }
+  ],
+  "per_language": [
+    {
+      "lang": "hi",
+      "eer": null,
+      "fpr": null
+    },
+    {
+      "lang": "ta",
+      "eer": null,
+      "fpr": null
+    },
+    {
+      "lang": "bn",
+      "eer": null,
+      "fpr": null
+    },
+    {
+      "lang": "en",
+      "eer": null,
+      "fpr": null
+    }
+  ],
+  "runtime": {
+    "rtf": null,
+    "peak_ram_mb": null,
+    "cores": 1,
+    "device": null
+  }
+}

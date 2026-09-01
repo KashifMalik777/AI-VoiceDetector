@@ -1,0 +1,14 @@
+{
+  "onnx": "xlsr_l7_int8.onnx",
+  "base": "facebook/wav2vec2-xls-r-300m",
+  "layers_kept": 7,
+  "hidden_dim": 1024,
+  "params_millions": 101.3,
+  "quantized": true,
+  "window_s": 4.0,
+  "trained": true,
+  "note": "Trained head -- detector participates in verdicts.",
+  "threads": 8,
+  "onnx_ms_mean": 2776.0,
+  "expected_ood_eer": 8.4
+}

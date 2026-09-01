@@ -1,0 +1,14 @@
+{
+  "type": "score",
+  "seq": 2,
+  "t_ms": 2000,
+  "state": "ABSTAIN",
+  "reason": "INSUFFICIENT_SPEECH",
+  "detail": "1.2 s of net speech; 3.0 s required",
+  "quality": {
+    "net_speech_s": 1.2,
+    "snr_db": 18.0,
+    "pkt_loss": 0.0,
+    "enhancement_detected": false
+  }
+}

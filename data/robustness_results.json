@@ -1,0 +1,66 @@
+{
+  "generated": "2026-09-01T06:46:08",
+  "note": "Spoof-detection recall of trained XLS-R L7 probe under degradations. 52 held fakes. caught = P(fake)>0.5.",
+  "conditions": {
+    "clean": {
+      "mean_p_fake": 0.868,
+      "spoof_caught_pct": 96.2
+    },
+    "telephony_amr_nb": {
+      "mean_p_fake": 0.916,
+      "spoof_caught_pct": 100.0
+    },
+    "g711_ulaw": {
+      "mean_p_fake": 0.902,
+      "spoof_caught_pct": 96.2
+    },
+    "g711_alaw": {
+      "mean_p_fake": 0.902,
+      "spoof_caught_pct": 96.2
+    },
+    "adpcm": {
+      "mean_p_fake": 0.908,
+      "spoof_caught_pct": 96.2
+    },
+    "opus_16k": {
+      "mean_p_fake": 0.895,
+      "spoof_caught_pct": 96.2
+    },
+    "mp3_16k": {
+      "mean_p_fake": 0.811,
+      "spoof_caught_pct": 92.3
+    },
+    "resample_44k": {
+      "mean_p_fake": 0.867,
+      "spoof_caught_pct": 96.2
+    },
+    "lowpass_8k": {
+      "mean_p_fake": 0.874,
+      "spoof_caught_pct": 96.2
+    },
+    "clip": {
+      "mean_p_fake": 0.802,
+      "spoof_caught_pct": 94.2
+    },
+    "noise_suppression": {
+      "mean_p_fake": 0.916,
+      "spoof_caught_pct": 100.0
+    },
+    "noise_10db": {
+      "mean_p_fake": 0.566,
+      "spoof_caught_pct": 57.7
+    },
+    "noise_0db": {
+      "mean_p_fake": 0.487,
+      "spoof_caught_pct": 46.2
+    },
+    "reverb_rt60_0.4": {
+      "mean_p_fake": 0.364,
+      "spoof_caught_pct": 34.6
+    },
+    "reverb_rt60_0.9": {
+      "mean_p_fake": 0.246,
+      "spoof_caught_pct": 17.3
+    }
+  }
+}
