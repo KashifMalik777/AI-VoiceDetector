@@ -1,0 +1,44 @@
+{
+  "generated": "2026-09-01T09:03:13",
+  "note": "Spoof recall of trained XLS-R L7 probe under degradation, on held-out fake speakers (seed-0 25% holdout). caught = mean P(fake) > 0.5 per clip.",
+  "n_held_fake_clips": 79,
+  "conditions": {
+    "clean": {
+      "mean_p_fake": 0.839,
+      "spoof_caught_pct": 96.2
+    },
+    "reverb_rt60_0.9": {
+      "mean_p_fake": 0.187,
+      "spoof_caught_pct": 12.7
+    },
+    "reverb_rt60_0.4": {
+      "mean_p_fake": 0.271,
+      "spoof_caught_pct": 17.7
+    },
+    "noise_0db": {
+      "mean_p_fake": 0.613,
+      "spoof_caught_pct": 68.4
+    },
+    "noise_10db": {
+      "mean_p_fake": 0.646,
+      "spoof_caught_pct": 72.2
+    },
+    "clip": {
+      "mean_p_fake": 0.815,
+      "spoof_caught_pct": 92.4
+    },
+    "resample_44k": {
+      "mean_p_fake": 0.833,
+      "spoof_caught_pct": 96.2
+    },
+    "lowpass_8k": {
+      "mean_p_fake": 0.843,
+      "spoof_caught_pct": 96.2
+    }
+  },
+  "real_false_positive": {
+    "n": 149,
+    "mean_p_fake": 0.227,
+    "false_positive_pct": 8.7
+  }
+}

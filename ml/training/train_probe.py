@@ -113,7 +113,40 @@ def build_backbone(card: dict):
     return bb
 
 
-def embed_all(items, bb, batch=8):
+def make_augmenter():
+    """Random channel degradation applied to a training window, so the probe learns
+    invariance to the field's known-hard conditions (reverb + additive noise). Test
+    windows are NEVER augmented -- augmentation touches training data only."""
+    import random as _r
+    from attacks.laundering import reverb, add_noise, noise_suppression_sim
+    # Pool tuned across several runs to hit three axes at once:
+    #  * reverb (0.4-0.9 s) -- the field's hardest channel and our worst weakness.
+    #  * low-SNR additive noise DOWN TO 0 dB -- reintroduced (it was cut earlier for
+    #    driving false positives) because noise_suppression is now in the pool to
+    #    hold the real-speech FP down, so the model can see 0 dB fakes and still not
+    #    flag denoised real speech.
+    #  * noise_suppression (Krisp/Teams-class) -- teaches that artifact-stripped
+    #    real speech is still real; the direct FP fix.
+    # ~27% of windows stay clean so discrimination (EER) is not dragged too far.
+    pool = [
+        None, None, None,                    # ~27% clean -> protect EER
+        lambda w: reverb(w, 0.9),
+        lambda w: reverb(w, 0.6),
+        lambda w: reverb(w, 0.4),
+        lambda w: add_noise(w, 0.0),         # 0 dB -> lift noise_0db recall
+        lambda w: add_noise(w, 3.0),
+        lambda w: add_noise(w, 5.0),
+        lambda w: add_noise(w, 10.0),
+        noise_suppression_sim,               # FP control
+    ]
+
+    def aug(w):
+        f = _r.choice(pool)
+        return w if f is None else f(w).astype(np.float32)
+    return aug
+
+
+def embed_all(items, bb, batch=8, augment=None):
     import torch
     dev = _device()
     if dev == "cuda":                       # GPU can chew far bigger batches
@@ -137,11 +170,14 @@ def embed_all(items, bb, batch=8):
         if a is None or len(a) < SR // 2:
             continue
         for w in windows(a):
+            if augment is not None:
+                w = augment(w)
             buf.append(w); bmeta.append((label, spk, gen, f.name))
             if len(buf) >= batch:
                 flush()
         if i % 5 == 0 or i == len(items):
-            print(f"    embedded {i}/{len(items)} files ({time.time()-t0:.0f}s)")
+            tag = " (aug)" if augment is not None else ""
+            print(f"    embedded {i}/{len(items)} files ({time.time()-t0:.0f}s){tag}")
     flush()
     if not embs:
         sys.exit("no usable audio found")
@@ -178,6 +214,11 @@ def main():
     ap.add_argument("--holdout-generator", default=None,
                     help="generator folder name to exclude from training entirely")
     ap.add_argument("--epochs", type=int, default=400)
+    ap.add_argument("--augment", action="store_true",
+                    help="augment TRAINING windows with reverb+noise to close the "
+                         "robustness gap (test windows stay clean -- no leakage)")
+    ap.add_argument("--aug-passes", type=int, default=1,
+                    help="number of extra augmented passes over the training set")
     a = ap.parse_args()
 
     card_p = ROOT / "ml" / "onnx" / "model_card.json"
@@ -199,43 +240,59 @@ def main():
     print(f"\n[2/5] loading backbone ({card['base']}, {card['layers_kept']} layers)")
     bb = build_backbone(card)
 
-    print("\n[3/5] extracting embeddings (the slow part)")
-    X, meta = embed_all(items, bb)
-    y = np.array([m[0] for m in meta])
-    spks = np.array([m[1] for m in meta])
-    gns = np.array([m[2] for m in meta])
-    print(f"    {X.shape[0]} windows · {X.shape[1]}-dim · "
-          f"{int((y==0).sum())} real / {int((y==1).sum())} fake")
-
-    print("\n[4/5] speaker-disjoint split")
-    real_spks = sorted({s for s, l in zip(spks, y) if l == 0})
-    fake_spks = sorted({s for s, l in zip(spks, y) if l == 1})
-
-    # Hold out ~25% of speakers on EACH side (not a single speaker) so the test
-    # set is large enough for a stable EER. A single-speaker holdout gives a tiny,
-    # high-variance test whose EER swings wildly and can invert.
+    # Speaker-disjoint split is decided at the FILE level, before embedding, so an
+    # augmented pass can be run over the training files only. Hold out ~25% of
+    # speakers per side (not a single speaker) for a stable EER; a single-speaker
+    # holdout gives a tiny, high-variance test whose EER swings and can invert.
+    print("\n[3/5] speaker-disjoint split")
+    real_spks = sorted({s for _, l, s, _ in items if l == 0})
+    fake_spks = sorted({s for _, l, s, _ in items if l == 1})
     import random as _r
     _r.seed(0)
     rr = list(real_spks); _r.shuffle(rr)
     ff = list(fake_spks); _r.shuffle(ff)
     n_hr = max(1, round(len(rr) * 0.25))
     n_hf = max(1, round(len(ff) * 0.25))
-    held_real = set(rr[:n_hr])
-    held_fake = set(ff[:n_hf])
-    te = np.isin(spks, list(held_real | held_fake))
-    print(f"    test real speakers: {len(held_real)}/{len(real_spks)} · "
-          f"test fake speakers: {len(held_fake)}/{len(fake_spks)}")
-    if not te.any() or te.all():
-        te[::5] = True
-    if a.holdout_generator:
-        # leave-one-generator-out: ALL windows of this generator go to test,
-        # none to train -> the honest "unseen generator" number.
-        also = gns == a.holdout_generator
-        te = te | also
-        print(f"    holdout generator: '{a.holdout_generator}' -> test only (unseen)")
-    tr = ~te
+    held = set(rr[:n_hr]) | set(ff[:n_hf])
 
-    print(f"    train {tr.sum()} windows · test {te.sum()} windows")
+    def is_test(it):
+        _, _, s, g = it
+        if a.holdout_generator and g == a.holdout_generator:
+            return True                     # leave-one-generator-out -> unseen, test only
+        return s in held
+
+    test_items = [it for it in items if is_test(it)]
+    train_items = [it for it in items if not is_test(it)]
+    print(f"    test real speakers: {n_hr}/{len(real_spks)} · "
+          f"test fake speakers: {n_hf}/{len(fake_spks)}")
+    if a.holdout_generator:
+        print(f"    holdout generator: '{a.holdout_generator}' -> test only (unseen)")
+    if not test_items or not train_items:
+        sys.exit("degenerate split -- record more speakers or add generators")
+
+    print("\n[4/5] extracting embeddings (the slow part)")
+    print("    test (clean):")
+    Xte, mte = embed_all(test_items, bb)
+    print("    train (clean):")
+    Xtr, mtr = embed_all(train_items, bb)
+    X_parts, m_parts = [Xte, Xtr], [mte, mtr]
+    n_test = Xte.shape[0]
+    if a.augment:
+        aug = make_augmenter()
+        for p in range(a.aug_passes):
+            print(f"    train (augmented pass {p+1}/{a.aug_passes}):")
+            Xa, ma = embed_all(train_items, bb, augment=aug)
+            X_parts.append(Xa); m_parts.append(ma)
+
+    X = np.concatenate(X_parts)
+    meta = [m for part in m_parts for m in part]
+    y = np.array([m[0] for m in meta])
+    te = np.zeros(len(meta), dtype=bool); te[:n_test] = True   # clean test windows first
+    tr = ~te
+    print(f"    {X.shape[0]} windows · {X.shape[1]}-dim · "
+          f"{int((y==0).sum())} real / {int((y==1).sum())} fake · "
+          f"train {tr.sum()} / test {te.sum()}"
+          + (f" · augment x{a.aug_passes}" if a.augment else ""))
     if tr.sum() < 10 or te.sum() < 4:
         sys.exit("not enough data -- record more, or add more clone generators")
 
@@ -275,6 +332,8 @@ def main():
         "test_speaker": spk[-1] if len(spk) > 1 else None,
         "holdout_generator": a.holdout_generator,
         "speaker_disjoint": len(spk) > 1,
+        "augmented": bool(a.augment),
+        "aug_passes": a.aug_passes if a.augment else 0,
         "metrics": m,
     }, indent=2))
 

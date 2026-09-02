@@ -1,0 +1,359 @@
+================================================================================
+SATYAVAANI — FULL PROJECT EXPLANATION
+Real-Time Voice Cloning & Impersonation Defense
+Smart India Hackathon 2025 · Problem Statement 26104 (AICTE, Cyber Security)
+================================================================================
+
+Last updated: 2026-09-01. This document explains the whole project in plain
+language: the problem, the idea, how every part works, the numbers, and how to
+run and demo it. It is written to be read start to finish; no prior context
+needed.
+
+
+--------------------------------------------------------------------------------
+1. THE PROBLEM (why this exists)
+--------------------------------------------------------------------------------
+
+Voice cloning is now cheap, fast, and convincing. With 30–60 seconds of someone's
+voice, free and paid tools (ElevenLabs, XTTS-v2, F5-TTS, Seed-VC, and many TTS
+systems) can synthesize new speech in that voice, or convert one person's live
+speech into another person's voice in real time.
+
+The highest-stakes place this lands is a phone call to a bank. A fraudster clones
+a customer's (or an executive's) voice and calls the fraud desk / relationship
+manager to authorize a transfer. The human on the other end has no reliable way to
+tell a cloned voice from a real one by ear. Existing defenses (caller-ID checks,
+security questions, callbacks) are slow, easily socially-engineered, or skipped
+under pressure ("it's urgent, transfer now").
+
+SatyaVaani is a detector that listens to the live call and scores, second by
+second, whether the caller's voice is genuine human speech or synthetic /
+converted — while the call is still happening, so a risky transaction can be held
+before money moves.
+
+Design promise (the one line): "Scores a caller while they are still talking.
+Holds the transaction. Never cancels it." The system advises and holds; a human
+officer always makes the final call.
+
+
+--------------------------------------------------------------------------------
+2. WHAT IT DOES, AT A GLANCE
+--------------------------------------------------------------------------------
+
+- Takes a live 16 kHz mono audio stream (the call).
+- Every 1 second, looks at the last 4 seconds of audio (a sliding window).
+- Runs three independent detectors on that window and fuses them into a single
+  risk score from 0 to 100.
+- Maps the score to a band: SAFE / WATCH / VERIFY / HOLD, each with an action.
+- If there is not enough real speech in the window, it ABSTAINS ("insufficient
+  evidence") instead of guessing — so silence or noise never causes a false alarm.
+- Every event is written to a tamper-evident SHA-256 hash chain for audit. No raw
+  audio is stored — only extracted features and hashes.
+- A live dashboard shows the risk meter, waveform, quality telemetry, timeline,
+  reasons, and a transaction gate. There is also an offline "Audio File Lab" to
+  analyze a recorded .wav.
+
+First verdict lands about 4.4 seconds into a call (it needs a full 4-second window
+of mostly-speech), then refreshes roughly every second.
+
+
+--------------------------------------------------------------------------------
+3. SYSTEM ARCHITECTURE (the pieces and how they connect)
+--------------------------------------------------------------------------------
+
+Live audio  ->  Evidence Gate (VAD)  ->  [ 3 detectors in parallel ]  ->  Risk
+Engine (fusion + smoothing + persistence)  ->  Band + Action  ->  Dashboard &
+Audit log.
+
+Repository layout (one owner per top-level directory; the seam between them is
+frozen contracts so six people can build in parallel):
+
+  contracts/  frozen schemas, WebSocket protocol, fixtures (the one API seam)
+  mocks/      a mock server that serves fixtures on the real routes (day-1 unblock)
+  backend/    FastAPI, WebSocket hub, SQLite, risk engine, alerts, audit chain
+  ml/         detectors, features, fusion, evidence gate, training pipeline
+  frontend/   Vite + React dashboard (live + file lab)
+  data/       dataset prep, augmentation, evaluation, results JSON
+  attacks/    clone generation, audio laundering, codec-chain stress tests
+  docs/       architecture, demo script, role guides, deck assets
+  scripts/    setup, run, benchmark, dataset prep, robustness eval
+
+The key contract: the backend imports exactly one thing from ML —
+`from ml.registry import get_detectors`. Every detector returns a DetectorResult.
+On day 1 they returned plausible random scores so the whole system ran end to end;
+since then they have been replaced by real detectors without changing the seam.
+
+
+--------------------------------------------------------------------------------
+4. THE NEURAL DETECTOR (the main brain)
+--------------------------------------------------------------------------------
+
+Backbone: Meta's wav2vec2-XLS-R-300m, a self-supervised speech model pre-trained
+on 436,000+ hours across 128 languages. It turns raw audio into rich frame-level
+feature vectors.
+
+Layer truncation (the key engineering choice): the full model has 24 transformer
+layers (~318M parameters). Deep layers encode linguistic / semantic meaning (which
+overfit to specific words and languages). Early-to-middle layers capture acoustic
+physics — vocal-tract dynamics and the artifacts that neural vocoders leave behind.
+We keep only the first 7 layers and discard 8–24.
+
+  - Parameters drop from ~318M to 101.3M (~3x less compute).
+  - Expected out-of-domain EER improves from ~16.9% to ~8.4% (from the truncation
+    literature) — shallower features generalize better to unseen generators.
+
+Classifier head (the trained part): we freeze the truncated backbone and train
+only a small linear "probe" on top. For a 4-second window we mean-pool the layer-7
+features into one 1024-dimensional vector, then a logistic-regression head outputs
+P(fake). Because only the tiny head is trained, retraining takes minutes, not
+hours — we can retrain every time new audio arrives.
+
+Export & quantization: the trained head is baked into the graph, exported to ONNX
+(FP32, 405 MB), then dynamically quantized to INT8 (102 MB, 4x smaller). The
+backend runs the INT8 ONNX on CPU.
+
+
+--------------------------------------------------------------------------------
+5. THE EVIDENCE GATE (why we almost never false-alarm)
+--------------------------------------------------------------------------------
+
+Almost nobody ships this, and it is the most defensible feature. Before any window
+is scored, it must pass an evidence gate; otherwise the system returns ABSTAIN and
+cannot escalate.
+
+Three checks (in ml/gate.py):
+  1. Dynamic-range gate: human speech has 20–40 dB of variation between loud
+     syllables and quiet consonants/pauses; steady room noise has < 6 dB. If the
+     95th-to-10th percentile energy spread is under 12 dB, the window is "no speech
+     dynamics" — just noise — and scores nothing.
+  2. Net-speech floor: a peak-relative VAD (a frame within 32 dB of the window peak
+     counts as speech). The window needs at least 2.5 seconds of net speech out of
+     4. (This was lowered from 3.0 s, which over-abstained on natural conversation
+     with pauses.)
+  3. SNR / packet-loss: SNR is a deliberately WEAK gate — it only blocks when we can
+     actually measure noise (we have heard genuinely quiet frames this session, via
+     a session-level NoiseTracker). Otherwise a clean, continuously-speaking caller
+     — the best possible input — would be wrongly rejected. Low SNR mainly reduces
+     CONFIDENCE downstream. Windows that are >15% digital silence are dropped-packet.
+
+Why the peak-relative VAD matters: an earlier version measured the noise floor
+inside the window and called anything above it speech. For a caller who talks
+continuously, the floor is itself speech, so almost nothing cleared it and net
+speech collapsed to ~0 — i.e. the better you spoke, the worse it scored. Anchoring
+to the window peak fixes all four regimes (all-speech, speech+pauses, quiet room,
+loud noise).
+
+There is also an enhancement detector: aggressive noise suppression (Krisp / Teams
+/ Zoom RNNoise-class) strips the very artifacts detection relies on and can make
+REAL speech look fake. When it is detected, the system halves its own confidence
+and cannot reach HOLD.
+
+
+--------------------------------------------------------------------------------
+6. DEFENSE IN DEPTH — THREE DETECTORS, FUSED
+--------------------------------------------------------------------------------
+
+The risk engine (backend/risk.py) fuses three independent forensic signals:
+
+  Detector          Method                         Weight  Catches
+  ---------------   ----------------------------   ------  --------------------------
+  Neural            Truncated XLS-R L7 INT8         0.55    vocoder artifacts, synthetic
+                                                            phoneme transitions
+  Codec / Spectral  Rolloff > 7 kHz, tilt,          0.25    high-frequency collapse,
+                    flatness                                artificial spectral flatness
+  Speaker           Resemblyzer d-vectors           0.20    mid-call voice switching /
+                                                            trajectory breaks
+
+On top of the acoustic fusion, a context lift adjusts risk using the transaction
+amount, the fraud-risk tier, caller-ID verification, and scam-keyword detection —
+a large transfer from an unverified number with scam phrasing is riskier than the
+same voice score on a trivial call.
+
+Two mechanisms stop the meter from twitching:
+  - Exponential moving average (alpha = 0.6) smooths the score over time.
+  - K-of-N persistence: the system requires elevated synthetic confidence in at
+    least K = 3 of the last N = 6 windows before escalating to HOLD. One weird
+    window cannot hold a transaction.
+
+Calibration: scores are Platt-scaled so a "70" means roughly the same thing every
+time. We report the gap between the ideal-threshold cost (minDCF) and the
+fixed-threshold cost (actDCF); a small gap means the scores are actually usable at
+a chosen operating point, not merely separable.
+
+Bands and actions:
+  SAFE    -> NONE            (legitimate voice)
+  WATCH   -> FLAG            (minor anomaly, keep watching)
+  VERIFY  -> ADVISE_VERIFY   (officer step-up challenge)
+  HOLD    -> HOLD_TRANSACTION(high-confidence clone; hold, human decides)
+
+
+--------------------------------------------------------------------------------
+7. THE DATA (and why the benchmark is honest)
+--------------------------------------------------------------------------------
+
+Deployment target is English + Hindi (Indian banking calls). The benchmark is
+LANGUAGE-MATCHED on purpose. If real speech is one language and fake is another,
+the model learns to separate LANGUAGE instead of synthesis artifacts — a confound
+a judge will (rightly) catch. An early run that mixed English-real with Bengali-
+fake produced a meaningless result for exactly this reason; it was thrown out.
+
+Assembled set: ~830 real / ~384 fake clips, 104 speakers, 9 generators.
+  - English real: LibriSpeech dev-clean + ASVspoof 2019 bonafide
+  - English fake: ASVspoof 2019 LA systems A01–A06 (6 systems) + ElevenLabs clones
+  - Hindi real:  Google FLEURS hi_in
+  - Hindi fake:  IndicSynth — freevc24, xtts_v2
+
+Two anti-cheating protocols the training script enforces:
+  - Speaker-disjoint split: a speaker never appears in both train and test.
+    Detectors often learn speaker identity instead of synthesis; without this the
+    numbers are fiction. We hold out ~25% of speakers per side.
+  - Leave-one-generator-out (LOGO): with a holdout flag, one fake generator is
+    excluded from training entirely and reported separately — the honest "unseen
+    generator" number.
+
+We report EER, minDCF, actDCF, C_llr, and FAR@1%FRR — never accuracy alone.
+
+
+--------------------------------------------------------------------------------
+8. RESULTS (current, measured — not aspirational)
+--------------------------------------------------------------------------------
+
+Deployed model = the augmentation-hardened "v4" head.
+
+Discrimination (English + Hindi, speaker-disjoint, 104 speakers, 9 generators):
+  - Seen-generator EER: 0.75%   (deployed v4)
+  - The pre-augmentation head scored 0.61%; the 0.14-point trade buys large
+    robustness gains (below).
+  - Unseen-generator (LOGO), measured on the pre-augmentation head:
+      0.42% against a familiar TTS family;
+      17.13% against a never-seen cross-lingual voice-conversion model.
+    (This is the honest generalization gap; not yet re-measured on v4.)
+  - "OOD EER 8.4%" is the EXPECTED out-of-domain figure from the layer-7
+    truncation research — an architectural expectation, not a fresh measurement.
+
+Robustness — spoof recall under channel degradation (held-out fake speakers),
+clean head -> deployed v4:
+  Condition                              Clean    v4
+  clean fakes                            96%      91%
+  reverb RT60 0.9 s                      13%      39%
+  reverb RT60 0.4 s                      18%      44%
+  noise 0 dB SNR                         68%      56%
+  noise 10 dB SNR                        72%      82%
+  real speech -> noise-suppression FP    8.7%     6.7%
+On separate codec/telephony conditions the model is essentially unaffected
+(AMR-NB ~100%, MP3 @ 16 kbit/s ~92%) — the deployment channel is its strongest.
+
+How v4 was reached: reverb and heavy noise were the field's known-hard conditions
+and our weak spots. We trained THROUGH them — an augmentation pass over training
+windows only (test stays clean, so no data leakage) that degrades each window with
+random reverb, additive noise, and a noise-suppression simulation. It was tuned
+across four runs; v4 balances big reverb gains, low-SNR noise, and — via the
+noise-suppression augmentation — a denoising false-positive rate that actually
+dropped BELOW the clean baseline.
+
+Latency (measured on the demo laptop, scripts/bench_rtf.py):
+  - ~669 ms to process a 4-second window; real-time factor (RTF) 0.167.
+  - +330 ms of headroom inside the 1-second hop.
+  - Breakdown: neural 591 ms, speaker-trajectory 66 ms, codec 5.8 ms, features
+    5.9 ms, gate 0.5 ms.
+  - Note: a single-thread INT8 verify prints ~3.4 s ("over budget") — that is a
+    one-core worst case, not the real figure. Multi-threaded is the 669 ms above.
+
+
+--------------------------------------------------------------------------------
+9. ATTACKS & STRESS TESTING (we attack ourselves)
+--------------------------------------------------------------------------------
+
+- Clone generation: we record real voices and clone them with multiple generators
+  (ElevenLabs, XTTS-v2, F5-TTS). Using several generators matters because the
+  failure mode of this field is synthesis-method mismatch — a detector that has
+  seen one generator learns that generator's fingerprint, not "fakeness."
+- Seed-VC real-time voice conversion: the hardest attack — it converts a live
+  speaker into a target voice and beats prosody-based defenses. This is the attack
+  we demo ourselves.
+- Audio laundering (attacks/laundering.py): the cheapest attack and one a judge can
+  run — reverb, additive noise, clipping, resampling, low-pass, and a noise-
+  suppression simulation. Published work shows these can push other detectors from
+  ~1% EER to 40–58%. The same script doubles as our augmentation generator.
+- Codec chain: telephony codecs (AMR-NB, G.711, Opus, MP3) to mimic the real phone
+  channel.
+
+
+--------------------------------------------------------------------------------
+10. FRONTEND (the dashboard)
+--------------------------------------------------------------------------------
+
+React + Vite single-page app talking to the backend over WebSocket.
+
+- Light-first design with a dark-mode toggle (remembered per browser; applied
+  before first paint so there is no flash). Identity: porcelain canvas, white
+  forensic panels, an indigo->cyan signal accent, Archivo / IBM Plex type.
+- Live risk meter (0–100 radial gauge + band verdict + acoustic/context/confidence
+  sub-metrics). It holds the last verdict through brief gate dips so it does not
+  flicker while the caller keeps talking.
+- Real-time waveform (updates ~50x/second), quality telemetry strip, scored-window
+  timeline, and a reasons panel explaining each verdict.
+- Transaction gate card: shows the amount at risk and, on HOLD, the officer's
+  override options.
+- Audio File Lab: drag-and-drop a .wav for offline analysis.
+- Scenario drawer: adjust amount, caller-ID, channel, fraud tier for demos.
+- Audit ledger modal: live view of the SHA-256 hash chain.
+
+
+--------------------------------------------------------------------------------
+11. PRIVACY & AUDIT
+--------------------------------------------------------------------------------
+
+- No raw call audio is written to disk — only extracted features (numbers) and
+  SHA-256 hashes. This is a deliberate privacy and compliance choice for banking.
+- Every event (each scored frame, each alert, each override) is appended to a
+  tamper-evident SHA-256 hash chain: each entry hashes the previous one, so any
+  later edit is detectable. This is the compliance ledger a bank audit needs.
+
+
+--------------------------------------------------------------------------------
+12. HOW TO RUN IT
+--------------------------------------------------------------------------------
+
+Environment (do this once; non-obvious gotchas):
+  - Use Python 3.11 for the venv (3.14 has no ML wheels). Install requirements.
+  - Install torch separately (GPU: the cu124 wheel; CPU: the cpu wheel).
+  - Install resemblyzer, then `pip uninstall typing -y` (it ships a broken backport).
+  - Regenerate the ONNX from the committed head:
+      python ml/training/export_backbone.py --head ml/onnx/probe_head.npz
+
+Run (two terminals):
+  1) Backend:  uvicorn backend.main:app --reload --port 8000   (check /health)
+  2) Frontend: cd frontend && npm install && npm run dev        (http://localhost:5173)
+
+Open http://localhost:5173 (must be localhost, not a LAN IP, or the browser blocks
+the mic). Turn OFF aggressive mic noise suppression (Krisp / RTX Voice / Teams) for
+honest detection. Click "Start Live Call", allow the mic, and speak. Restart the
+backend after any model retrain — it loads the ONNX at startup.
+
+No backend yet? `python mocks/mock_server.py` serves the same routes with fixture
+data; the frontend works against it unchanged.
+
+
+--------------------------------------------------------------------------------
+13. HONEST LIMITATIONS (what we would say before a judge asks)
+--------------------------------------------------------------------------------
+
+- Unseen novel voice-conversion models are the hard case: ~17% EER against a
+  generator family never seen in training. This is the field's open problem, not a
+  bug; breadth of training generators is the mitigation and the roadmap.
+- Heavy reverberation and 0 dB-SNR noise still degrade recall (though augmentation
+  roughly tripled reverb recall). Real telephony channels — our actual deployment —
+  are the model's strongest conditions.
+- The detector is an ADVISORY. It holds and recommends; it never auto-cancels a
+  transaction. A human officer decides, with the reasons and audit trail in hand.
+- The speaker detector is most useful for mid-call voice switching; it needs an
+  enrolled reference to do full verification.
+
+Roadmap: re-measure leave-one-generator-out on v4; add more generators (vits, more
+ASVspoof systems) for breadth; swap the VAD for silero-vad; broaden Hindi/Indic
+coverage.
+
+================================================================================
+END
+================================================================================

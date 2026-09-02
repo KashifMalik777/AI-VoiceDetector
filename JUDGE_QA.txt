@@ -1,0 +1,337 @@
+================================================================================
+SATYAVAANI — JUDGE Q&A BATTLECARD
+Real-Time Voice Cloning & Impersonation Defense · SIH 2025 · PS 26104
+================================================================================
+
+How to use this: these are the questions judges actually ask, with answers you
+can say out loud. Numbers here are the CURRENT measured values. Where a number is
+an expectation rather than a measurement, it says so — never claim a measured
+number you did not measure. If you don't know, say "we haven't measured that yet"
+— judges reward honesty and punish bluffing.
+
+Quick fact sheet (memorize these):
+  - Backbone: wav2vec2-XLS-R-300m, truncated 24 -> 7 layers, 101.3M params.
+  - Runs as INT8 ONNX (102 MB) on CPU.
+  - Window 4 s, hop 1 s, 16 kHz mono. First verdict ~4.4 s.
+  - Latency (demo laptop): ~669 ms/window, RTF 0.167, +330 ms hop headroom.
+  - Deployed model = augmentation-hardened "v4": seen-generator EER 0.75%.
+  - Unseen-generator (measured, pre-aug head): 0.42% familiar / 17.13% novel VC.
+  - OOD EER 8.4% = EXPECTED value from layer-7 truncation (not a fresh measurement).
+  - Data: ~830 real / ~384 fake, 104 speakers, 9 generators, English + Hindi.
+  - Fusion weights: neural 0.55, codec 0.25, speaker 0.20. EMA 0.6. K-of-N 3/6.
+
+
+================================================================================
+A. PROBLEM & IMPACT
+================================================================================
+
+Q. What problem does this solve?
+A. Voice cloning is cheap and convincing — 30–60 seconds of audio is enough to
+   clone someone. Fraudsters use it to call banks and authorize transfers in a
+   customer's or executive's voice. Humans can't tell by ear. We detect synthetic
+   / converted voice on the LIVE call, in time to hold a risky transaction.
+
+Q. Who is the user?
+A. A bank fraud-desk officer or relationship manager on a live call, plus the
+   bank's compliance/audit function. It's an advisory tool for a human, not an
+   autonomous blocker.
+
+Q. Why is this urgent now?
+A. The tools crossed the "good enough to fool a person over a phone line" line in
+   the last two years, and they're free. The attack scales; the defense hasn't.
+
+Q. Isn't caller-ID / OTP / a security question enough?
+A. Those verify the CHANNEL or KNOWLEDGE, not the VOICE. Caller-ID is spoofable,
+   OTPs get social-engineered ("read me the code you just got"), and security
+   answers are often public. None of them notice that the voice itself is
+   synthetic. We add the missing layer: the biometric signal on the wire.
+
+
+================================================================================
+B. THE MODEL / ML
+================================================================================
+
+Q. What model do you use and why?
+A. Meta's wav2vec2-XLS-R-300m — self-supervised, pre-trained on 436k+ hours across
+   128 languages, so it already understands the acoustics of speech. We don't
+   fine-tune the whole thing; we freeze it and train a small linear head on top.
+
+Q. What is "layer truncation" and why does it help?
+A. The full model has 24 transformer layers. Deep layers encode meaning/language,
+   which OVERFITS to specific words and languages. Early-to-middle layers capture
+   acoustic physics — vocal-tract dynamics and vocoder artifacts. We keep only the
+   first 7 layers. That cuts params from ~318M to 101.3M (~3x less compute) and,
+   per the truncation literature, drops expected out-of-domain EER from ~16.9% to
+   ~8.4%. Shallower features generalize better to generators we've never seen.
+
+Q. You only train a linear head? Isn't that too simple?
+A. The backbone already did the hard representation learning on 436k hours. A
+   linear probe on frozen features is a standard, strong technique — and it means
+   we retrain in MINUTES on the small head instead of hours on the whole network,
+   so we can retrain every time new attack data arrives. The numbers (0.75% EER)
+   show the features are separable with a linear boundary.
+
+Q. How is the head trained?
+A. For each 4-second window we mean-pool the layer-7 features to a 1024-dim vector
+   and fit a logistic-regression head (P(fake) = sigmoid(w·h + b)) with L2
+   regularization. Torch, full-batch, a few hundred epochs — seconds on GPU.
+
+Q. Why INT8 quantization?
+A. To run on a CPU in real time. FP32 ONNX is 405 MB; dynamic INT8 is 102 MB (4x
+   smaller) and fast enough to stay well inside the 1-second hop. Banks won't put a
+   GPU on every call server.
+
+
+================================================================================
+C. EVALUATION & HONESTY (judges love these)
+================================================================================
+
+Q. What's your accuracy?
+A. We don't lead with accuracy — it's misleading on imbalanced data. We report EER,
+   minDCF, actDCF, C_llr, and FAR@1%FRR. Headline: equal error rate 0.75% on a
+   language-matched, speaker-disjoint English+Hindi test.
+
+Q. What is EER?
+A. Equal Error Rate — the operating point where the false-accept rate (a fake
+   passed as real) equals the false-reject rate (a real flagged as fake). Lower is
+   better; 0.75% means at the balanced threshold we're wrong under 1% of the time
+   on this test.
+
+Q. Is your test set leaking? How do you prevent it?
+A. Two protocols. (1) Speaker-disjoint split: a speaker never appears in both train
+   and test — we hold out ~25% of speakers per side. Detectors love to secretly
+   learn speaker identity instead of "fakeness"; without this the numbers are
+   fiction. (2) Leave-one-generator-out: we can pull an entire fake generator out
+   of training and test only on it — the honest "unseen generator" number.
+
+Q. What's the difference between minDCF and actDCF?
+A. minDCF is the cost at the best possible threshold (oracle). actDCF is the cost
+   at a threshold we fix IN ADVANCE. The GAP between them is deployment risk — a
+   system can separate classes beautifully (low minDCF) yet be uncalibrated and
+   useless at a real threshold (actDCF near 1.0). Our gap is small, so the scores
+   are usable, not just separable. We Platt-scale to keep them calibrated.
+
+Q. Why English AND Hindi? Why matched?
+A. Deployment is Indian banking calls. And the benchmark is language-matched ON
+   PURPOSE: if real is one language and fake is another, the model learns to
+   separate LANGUAGE, not synthesis — a confound. We caught exactly this early (an
+   English-real vs Bengali-fake run gave a meaningless result) and threw it out.
+
+Q. What is the "OOD EER 8.4%" on your slide?
+A. That's the EXPECTED out-of-domain EER from the layer-7 truncation research — an
+   architectural expectation, not a fresh measurement. Our measured generalization
+   is the leave-one-generator-out number: 0.42% against a familiar TTS family and
+   17.13% against a novel cross-lingual voice-conversion model.
+
+Q. 0.75% seems too good. Are you overfitting?
+A. It's on a speaker-disjoint test, which is the guard against that. The honest
+   caveat is the unseen-generator gap: 17% against a never-seen voice-conversion
+   model. Seen-generator performance is strong; truly novel generators are the open
+   problem, and we say so.
+
+
+================================================================================
+D. ROBUSTNESS & ATTACKS
+================================================================================
+
+Q. What happens over a real phone line / codec?
+A. Telephony is our STRONGEST channel. AMR-NB (8 kHz) recall ~100%, MP3 @ 16 kbit/s
+   ~92%. For many published detectors MP3@16k pushes EER from ~3.7% to ~55%; ours
+   barely moves. That matters because the phone codec is exactly our deployment
+   condition.
+
+Q. Can't an attacker just add reverb or noise to evade you?
+A. That's "audio laundering," and it was our weak spot — heavy reverb dropped recall
+   to ~13–18%. We fixed it by training THROUGH those degradations (augmentation):
+   reverb recall roughly tripled to ~39–44%, and 10 dB-noise recall rose to ~82%.
+   We attack ourselves with our own laundering script, so we measure this honestly.
+
+Q. What about noise suppression like Krisp or Teams?
+A. Double-edged: aggressive denoising strips the artifacts we rely on and can make
+   REAL speech look fake. Two defenses. (1) We detect enhancement and halve our own
+   confidence when we see it, so it can't reach HOLD. (2) We trained through a
+   noise-suppression simulation, which dropped the denoising false-positive rate to
+   6.7% — actually below our clean baseline of 8.7%.
+
+Q. What's the hardest attack?
+A. Real-time voice conversion (e.g. Seed-VC) — it converts a live speaker into a
+   target voice and defeats prosody-based defenses. It's the attack we demo
+   ourselves, and it's where the unseen-generator gap (17%) shows up. We're honest
+   that novel VC is the frontier.
+
+Q. Why several clone generators in training, not one?
+A. The failure mode of this field is synthesis-method mismatch: a detector that has
+   only seen one generator learns THAT generator's fingerprint, not "fakeness." We
+   train across 9 generators for breadth; adding more is the roadmap.
+
+Q. Can an attacker just play a real recording (replay)?
+A. Replay of genuine audio is a different threat (the audio IS real). The spectral/
+   codec detector picks up channel and playback artifacts, and the context engine
+   still applies (unverified caller, large amount). Full anti-replay is a known
+   extension.
+
+
+================================================================================
+E. LATENCY & DEPLOYMENT
+================================================================================
+
+Q. Is it actually real-time?
+A. Yes. On our demo laptop a 4-second window is processed in ~669 ms — a real-time
+   factor of 0.167, with ~330 ms of headroom inside the 1-second hop. First verdict
+   ~4.4 seconds into the call, refreshing about every second.
+
+Q. Your export says "OVER BUDGET 3.4 s" — explain.
+A. That's the single-thread INT8 self-check — a deliberate worst case. The real,
+   multi-threaded number from our benchmark is 669 ms. We always quote the measured
+   multi-thread figure.
+
+Q. Does it need a GPU?
+A. No — it runs INT8 on CPU in production. We use a GPU only to make TRAINING fast
+   (minutes). Banks won't put GPUs on call servers, so CPU inference was a hard
+   requirement.
+
+Q. How does it scale to many concurrent calls?
+A. Each call is an independent stream; the model is 102 MB and ~0.17 RTF per core,
+   so one core handles several calls or one call with large headroom. It scales
+   horizontally with CPU cores/servers.
+
+Q. What does "hop" and "window" mean?
+A. We look at the last 4 seconds (window) and re-score every 1 second (hop). 4 s is
+   the field standard — sub-second windows can't see the features that matter — and
+   a 1 s hop keeps the meter live.
+
+
+================================================================================
+F. FALSE POSITIVES & THE EVIDENCE GATE
+================================================================================
+
+Q. Do you guarantee zero false positives?
+A. No — no detector can, and we don't claim it. Our job is to MINIMIZE them. Under
+   aggressive noise suppression our false-positive rate is 6.7% and we halve
+   confidence when we detect enhancement so it can't reach HOLD; and the evidence
+   gate ensures silence/noise never scores at all. The system holds and advises — a
+   human officer makes the final decision, so a false positive costs a verification
+   step, not a cancelled transaction.
+
+Q. What is the evidence gate?
+A. Before scoring, a window must contain real speech. Three checks: dynamic range
+   >= 12 dB (real speech varies 20–40 dB; steady noise < 6 dB), at least 2.5 s of
+   net speech out of 4, and SNR/packet-loss sanity. If it fails, we ABSTAIN —
+   "insufficient evidence" — instead of guessing. This is what makes the system
+   safe to deploy: it never false-alarms on silence, hold music, or room noise.
+
+Q. Why does it sometimes say "insufficient evidence" while I'm talking?
+A. Natural speech has pauses, so some 4-second windows dip below the 2.5 s speech
+   floor, and the gate abstains for that window. The UI holds the last verdict for
+   up to 6 seconds through these brief dips, so it doesn't flicker; sustained
+   silence correctly falls back to "waiting for speech."
+
+Q. Why not just always output a score?
+A. Because a score on silence or noise is a lie, and one false hold on a real
+   customer destroys trust in the whole system. Abstaining is the honest and
+   deployable choice.
+
+
+================================================================================
+G. THE DECISION / FUSION
+================================================================================
+
+Q. How do you combine the detectors?
+A. Three independent signals — neural (weight 0.55), spectral/codec (0.25), speaker
+   trajectory (0.20) — are fused in log-odds, then Platt-calibrated. A context lift
+   adds transaction amount, fraud-risk tier, caller-ID status, and scam keywords.
+
+Q. Why not just use the neural net alone?
+A. Defense in depth. Each detector fails differently: the neural net is weak on
+   unseen generators, the spectral detector catches high-frequency collapse the
+   neural net might miss, and the speaker detector catches mid-call voice switching.
+   Fusing them covers each other's blind spots.
+
+Q. What stops the meter from over-reacting to one bad window?
+A. Two things: an exponential moving average (alpha 0.6) smooths the score, and
+   K-of-N persistence requires elevated confidence in at least 3 of the last 6
+   windows before escalating to HOLD. One anomalous window cannot hold a transfer.
+
+Q. What are the bands?
+A. SAFE (no action), WATCH (flag, keep watching), VERIFY (officer step-up
+   challenge), HOLD (hold the transaction; human decides). We advise and hold — we
+   never auto-cancel.
+
+
+================================================================================
+H. PRIVACY, AUDIT, COMPLIANCE
+================================================================================
+
+Q. Do you store people's calls?
+A. No raw audio is written to disk — only extracted numeric features and hashes.
+   That's a deliberate privacy and compliance decision for banking.
+
+Q. How is it auditable?
+A. Every event — each scored frame, each alert, each officer override — is appended
+   to a tamper-evident SHA-256 hash chain: each entry hashes the previous one, so
+   any later tampering is detectable. It's the verifiable ledger a bank audit needs,
+   and it's viewable live in the dashboard.
+
+Q. Is this biometric data? Any consent issues?
+A. We process the voice transiently to score it and keep only derived features and
+   hashes, not the voiceprint or the audio. Deployment would follow the bank's
+   existing call-recording consent and data-protection policies.
+
+
+================================================================================
+I. THE DEMO / PRODUCT
+================================================================================
+
+Q. Show me it working.
+A. Start a live call, allow the mic, speak normally — the meter reads SAFE
+   ("legitimate voice"). Then play a cloned clip (or run the Seed-VC conversion)
+   into the mic — within a few seconds it climbs to WATCH/VERIFY, and the reasons
+   panel explains why. Real speech stays SAFE; fakes escalate.
+
+Q. What if the demo breaks / no internet / no backend?
+A. There's a mock server that serves the same routes with fixture data, so the
+   dashboard runs unchanged. And the Audio File Lab analyzes a pre-recorded .wav if
+   the live mic misbehaves.
+
+Q. Light and dark mode?
+A. Light is the default; a header toggle switches to dark and remembers the choice.
+   The design is a "signal instrument" look — clean forensic panels, a live
+   waveform, an indigo->cyan accent.
+
+Q. Why does the first verdict take ~4–5 seconds?
+A. It needs a full 4-second window of mostly-speech before it will commit to a
+   score — that's the evidence gate being honest rather than guessing early on one
+   syllable.
+
+
+================================================================================
+J. LIMITATIONS & ROADMAP (say these before you're asked)
+================================================================================
+
+Q. Where does it fail?
+A. Novel, never-seen voice-conversion models (~17% EER) are the hard case — the
+   field's open problem. Heavy reverb and 0 dB-SNR noise still degrade recall,
+   though augmentation tripled reverb recall. Real telephony channels — our actual
+   deployment — are our strongest conditions, which is the point.
+
+Q. What's next?
+A. Re-measure leave-one-generator-out on the deployed v4 head; add more generators
+   (vits, more ASVspoof systems) for breadth; broaden Hindi/Indic coverage; swap
+   the dependency-free VAD for silero-vad; add speaker enrollment for full
+   verification.
+
+Q. Why should this win / what's novel?
+A. Three things almost nobody ships together: (1) an evidence gate that abstains
+   instead of false-alarming, (2) honest, speaker-disjoint, language-matched
+   evaluation with the unseen-generator gap reported openly, and (3) real-time CPU
+   inference with a tamper-evident audit chain — a system a bank could actually
+   deploy, not a leaderboard number.
+
+Q. Is the model trained or is this a mock?
+A. Trained and deployed. The neural detector is a real 101.3M-parameter model with
+   a trained head; model_card.json says "trained": true. Day 1 used stubs so the
+   whole pipeline ran end-to-end; those have been replaced by real detectors.
+
+================================================================================
+END
+================================================================================

@@ -12,14 +12,30 @@ class PCMWorklet extends AudioWorkletProcessor {
     this.target = (options.processorOptions && options.processorOptions.frameSamples) || sampleRate;
     this.buf = new Float32Array(this.target);
     this.n = 0;
+    // Emit a live level ~every 20 ms so the meter reacts to the mic in real time,
+    // independent of the 1 s PCM frame the detector needs. Without this the UI only
+    // moved once per second and looked dead between updates.
+    this.levelEvery = Math.max(1, Math.round(sampleRate * 0.02));
+    this.levelPeak = 0;
+    this.levelN = 0;
   }
   process(inputs) {
     const ch = inputs[0] && inputs[0][0];
     if (!ch) return true;
     for (let i = 0; i < ch.length; i++) {
-      this.buf[this.n++] = ch[i];
+      const s = ch[i];
+      this.buf[this.n++] = s;
+
+      const a = s < 0 ? -s : s;
+      if (a > this.levelPeak) this.levelPeak = a;
+      if (++this.levelN >= this.levelEvery) {
+        this.port.postMessage({ level: this.levelPeak });
+        this.levelPeak = 0;
+        this.levelN = 0;
+      }
+
       if (this.n >= this.target) {
-        this.port.postMessage(this.buf.slice(0));
+        this.port.postMessage({ pcm: this.buf.slice(0) });
         this.n = 0;
       }
     }

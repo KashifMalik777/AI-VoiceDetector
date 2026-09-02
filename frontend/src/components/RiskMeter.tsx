@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import type { ScoreMsg, Band } from '../lib/types'
 
 const LABEL: Record<Band, string> = {
@@ -16,18 +16,34 @@ const BAND_SUBTITLE: Record<Band, string> = {
 }
 
 export default function RiskMeter({ latest, running }: { latest: ScoreMsg | null; running: boolean }) {
-  const abstain = !latest || latest.state === 'ABSTAIN'
-  const risk = latest?.risk ?? 0
-  const band = (latest?.band ?? 'SAFE') as Band
-  const confidence = latest?.confidence ?? 0
-  const acoustic = latest?.scores?.synthetic ?? 0
-  const context = latest?.context ?? 0
+  // Hold the last real verdict through brief ABSTAIN windows so the meter doesn't
+  // flicker back to "listening" every time the gate momentarily dips (a natural pause,
+  // one borderline-SNR window) while the caller is still talking. A genuine, sustained
+  // silence still falls back to listening once the grace period lapses.
+  const HOLD_MS = 6000
+  const heldRef = useRef<{ msg: ScoreMsg; at: number } | null>(null)
+  if (!running) heldRef.current = null
+  else if (latest && latest.state !== 'ABSTAIN') heldRef.current = { msg: latest, at: Date.now() }
 
-  // Live idle timer: shows elapsed seconds since the session started without speech
+  const held = heldRef.current
+  const holding =
+    (!latest || latest.state === 'ABSTAIN') && running &&
+    held !== null && Date.now() - held.at < HOLD_MS
+  const shown: ScoreMsg | null =
+    latest && latest.state !== 'ABSTAIN' ? latest : holding ? held!.msg : null
+
+  const scored = shown !== null            // showing a verdict (fresh, or briefly held)
+  const abstain = !scored
+  const risk = shown?.risk ?? 0
+  const band = (shown?.band ?? 'SAFE') as Band
+  const confidence = shown?.confidence ?? 0
+  const acoustic = shown?.scores?.synthetic ?? 0
+  const context = shown?.context ?? 0
+
+  // Live idle timer: elapsed seconds of continuous no-speech.
   const [idleSec, setIdleSec] = useState(0)
   useEffect(() => {
-    if (!running) { setIdleSec(0); return }
-    if (!abstain) { setIdleSec(0); return }
+    if (!running || !abstain) { setIdleSec(0); return }
     const iv = setInterval(() => setIdleSec(s => s + 1), 1000)
     return () => clearInterval(iv)
   }, [running, abstain])
@@ -35,7 +51,6 @@ export default function RiskMeter({ latest, running }: { latest: ScoreMsg | null
   // Determine which visual mode we're in
   const idle = !running && !latest         // no session active, never scored
   const listening = running && abstain     // session active but no speech yet
-  const scored = !abstain                  // got a real verdict
 
   // SVG Gauge calculations
   const radius = 80
@@ -181,7 +196,7 @@ export default function RiskMeter({ latest, running }: { latest: ScoreMsg | null
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                 </svg>
-                <span>Zero-False-Positive Guarantee: Insufficient speech never triggers a transaction hold.</span>
+                <span>Evidence gate: insufficient speech abstains instead of guessing, so it never triggers a transaction hold.</span>
               </div>
             </div>
           )}

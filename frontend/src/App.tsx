@@ -11,6 +11,7 @@ import AlertFeed from './components/AlertFeed'
 import AudioAnalyzer from './components/AudioAnalyzer'
 import ScenarioDrawer, { ScenarioConfig } from './components/ScenarioDrawer'
 import AuditModal from './components/AuditModal'
+import ThemeToggle from './components/ThemeToggle'
 
 export default function App() {
   const call = useCall()
@@ -66,13 +67,6 @@ export default function App() {
       {/* Apple-Style Navigation Header */}
       <header className="apple-header">
         <div className="header-brand">
-          <div className="brand-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-              <line x1="12" y1="19" x2="12" y2="22" />
-            </svg>
-          </div>
           <div>
             <div className="brand-title-row">
               <h1 className="brand-title">SatyaVaani</h1>
@@ -84,6 +78,7 @@ export default function App() {
 
         {/* Mode Selector & Action Tools */}
         <div className="header-actions">
+          <ThemeToggle />
           <div className="segmented-control mode-switcher">
             <button
               type="button"

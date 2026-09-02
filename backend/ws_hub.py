@@ -76,11 +76,16 @@ async def handle(ws: WebSocket, session_id: str):
                 live.push(pcm)
                 live.t_ms += int(1000 * pcm.size / SR)
                 if live.ready():
-                    out = await asyncio.get_event_loop().run_in_executor(
-                        None, _score, live, dets, mv)
+                    loop = asyncio.get_event_loop()
+                    out = await loop.run_in_executor(None, _score, live, dets, mv)
+                    # Send the verdict FIRST, then persist off the response path. The
+                    # SQLite commit used to sit between scoring and sending, adding its
+                    # latency to every 1 s hop.
                     await ws.send_text(json.dumps(out["score"]))
                     if out.get("alert"):
                         await ws.send_text(json.dumps(out["alert"]))
+                    if out.get("frame"):
+                        loop.run_in_executor(None, _write_frame, out["frame"])
 
             elif (t := msg.get("text")) is not None:
                 try:
@@ -119,10 +124,10 @@ def _score(live: LiveSession, dets, mv: str) -> dict:
     # ---- ABSTAIN: say so instead of guessing. Never escalates. -------------------
     if not ok:
         live.abstained += 1
-        _persist_frame(live, state="ABSTAIN", quality=quality, mv=mv)
         return {"score": {"type": "score", "seq": live.seq, "t_ms": live.t_ms,
                           "state": "ABSTAIN", "reason": reason, "detail": detail,
-                          "quality": quality}}
+                          "quality": quality},
+                "frame": _frame_kwargs(live, "ABSTAIN", quality, mv)}
 
     ctx = WindowContext(seq=live.seq, t_ms=live.t_ms, sr=SR,
                         net_speech_s=quality["net_speech_s"], snr_db=quality["snr_db"],
@@ -140,9 +145,8 @@ def _score(live: LiveSession, dets, mv: str) -> dict:
     r = live.engine.step(results, quality, live.meta)
     live.frames += 1
 
-    feats = extract(w, SR)
-    _persist_frame(live, state="SCORED", quality=quality, mv=mv, r=r, feats=feats)
-
+    # Feature extraction is for the persisted audit row only, not the live verdict,
+    # so it is deferred to the writer thread along with the DB commit.
     payload = {
         "type": "score", "seq": live.seq, "t_ms": live.t_ms, "state": "SCORED",
         "risk": r["risk"], "band": r["band"],
@@ -157,7 +161,7 @@ def _score(live: LiveSession, dets, mv: str) -> dict:
         "model_version": mv,
     }
 
-    out = {"score": payload}
+    out = {"score": payload, "frame": _frame_kwargs(live, "SCORED", quality, mv, r=r, feats_window=w)}
     if escalated(live.prev_band, r["band"]):
         out["alert"] = _raise_alert(live, r)
     live.prev_band = r["band"]
@@ -183,21 +187,36 @@ def _raise_alert(live: LiveSession, r: dict) -> dict:
     return payload
 
 
-def _persist_frame(live, state, quality, mv, r=None, feats=None):
-    db = SessionLocal()
+def _frame_kwargs(live, state, quality, mv, r=None, feats_window=None):
+    """Freeze everything the audit row needs at score time. seq/t_ms advance on the
+    next hop, so they must be captured now; the actual write happens later off the
+    response path. `feats_window` is the audio window whose spectral features are
+    computed in the writer thread (they are for the row only, never sent live)."""
+    return {"sid": live.id, "seq": live.seq, "t_ms": live.t_ms, "state": state,
+            "r": r or {}, "quality": quality, "mv": mv, "feats_window": feats_window}
+
+
+def _write_frame(k: dict):
     try:
-        db.add(Frame(session_id=live.id, seq=live.seq, t_ms=live.t_ms, state=state,
-                     risk=(r or {}).get("risk"), band=(r or {}).get("band"),
-                     acoustic=(r or {}).get("acoustic"), context=(r or {}).get("context"),
-                     confidence=(r or {}).get("confidence"),
-                     detectors_json=json.dumps((r or {}).get("detectors", {})),
-                     quality_json=json.dumps(quality),
-                     reasons_json=json.dumps((r or {}).get("reasons", [])),
-                     features_json=json.dumps(feats or {}),   # features, never audio
-                     model_version=mv))
-        db.commit()
-    finally:
-        db.close()
+        w = k.get("feats_window")
+        feats = extract(w, SR) if w is not None else {}
+        r = k["r"]
+        db = SessionLocal()
+        try:
+            db.add(Frame(session_id=k["sid"], seq=k["seq"], t_ms=k["t_ms"], state=k["state"],
+                         risk=r.get("risk"), band=r.get("band"),
+                         acoustic=r.get("acoustic"), context=r.get("context"),
+                         confidence=r.get("confidence"),
+                         detectors_json=json.dumps(r.get("detectors", {})),
+                         quality_json=json.dumps(k["quality"]),
+                         reasons_json=json.dumps(r.get("reasons", [])),
+                         features_json=json.dumps(feats),   # features, never audio
+                         model_version=k["mv"]))
+            db.commit()
+        finally:
+            db.close()
+    except Exception as e:
+        log.warning("frame persist failed: %s", e)
 
 
 def _ensure_session_row(sid: str):

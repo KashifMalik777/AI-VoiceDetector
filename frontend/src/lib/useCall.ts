@@ -141,11 +141,17 @@ export function useCall() {
       })
       node.port.onmessage = (ev) => {
         if (activeSession.current !== mySession) return // stale, don't send
-        const pcm = resample(ev.data as Float32Array, ac.sampleRate)
-        let peak = 0
-        for (let i = 0; i < pcm.length; i++) peak = Math.max(peak, Math.abs(pcm[i]))
-        setS(p => ({ ...p, levels: [...p.levels.slice(1), peak] }))
-        if (sock.readyState === WebSocket.OPEN) sock.send(pcm.buffer)
+        const d = ev.data as { level?: number; pcm?: Float32Array }
+        // Fast path: ~20 ms level tick — keeps the meter live without touching the socket.
+        if (d.level !== undefined) {
+          setS(p => ({ ...p, levels: [...p.levels.slice(1), d.level as number] }))
+          return
+        }
+        // Slow path: 1 s PCM frame for the detector.
+        if (d.pcm) {
+          const pcm = resample(d.pcm, ac.sampleRate)
+          if (sock.readyState === WebSocket.OPEN) sock.send(pcm.buffer)
+        }
       }
       src.connect(node)
       // Keep the worklet pulling without echoing the mic to the speakers.

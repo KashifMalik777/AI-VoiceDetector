@@ -2,17 +2,81 @@
    SatyaVaani — Ultra-Luminous Apple Glassmorphism Design System
    ========================================================================== */
 
+/* ==========================================================================
+   Design tokens. LIGHT is the default (bare :root); DARK overrides under
+   [data-theme="dark"]. Every rule below consumes these variables, so the whole
+   system re-themes from this one block. A "signal instrument" identity: cool
+   porcelain canvas, white forensic panels, an indigo→cyan signal accent, and a
+   monospace data voice.
+   ========================================================================== */
 :root {
+  color-scheme: light;
+  --bg-canvas: #E9EDF4;
+
+  /* Typography roles */
+  --font-display: 'Archivo', system-ui, -apple-system, sans-serif;
+  --font-body: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Surfaces & fills — the retrofit seam for the hardcoded rgba() panels */
+  --surface: #FFFFFF;
+  --surface-grad: linear-gradient(160deg, #FFFFFF 0%, #F7F9FC 100%);
+  --surface-hover-grad: linear-gradient(160deg, #FFFFFF 0%, #EEF3FC 100%);
+  --fill-subtle: rgba(19, 33, 58, 0.045);
+  --fill-strong: rgba(19, 33, 58, 0.085);
+  --well: #E4E9F1;                 /* recessed "screen": scopes, selects */
+
+  --glass-border: #E1E7F0;
+  --glass-border-light: #EEF2F8;
+  --glass-border-strong: #C7D2E2;
+  --hair: #E1E7F0;                 /* hairline strokes used inside components */
+  --hair-2: #EDF1F7;
+
+  --glass-inset-glow: inset 0 1px 0 0 rgba(255, 255, 255, 0.7);
+  --glass-shadow: 0 1px 2px rgba(15, 27, 45, 0.04), 0 14px 34px -12px rgba(15, 27, 45, 0.16);
+  --glass-blur: blur(18px) saturate(140%);
+
+  --ink-primary: #101B2E;
+  --ink-secondary: #46566E;
+  --ink-tertiary: #8593A8;
+
+  --accent-cyan: #2B59F0;          /* the signal accent (name kept for compat) */
+  --accent-glow: rgba(43, 89, 240, 0.26);
+
+  --safe: #0C9C6A;
+  --safe-glow: rgba(12, 156, 106, 0.30);
+  --safe-bg: rgba(12, 156, 106, 0.12);
+
+  --watch: #B47407;
+  --watch-glow: rgba(180, 116, 7, 0.28);
+  --watch-bg: rgba(180, 116, 7, 0.13);
+
+  --crit: #D92D2D;
+  --crit-glow: rgba(217, 45, 45, 0.28);
+  --crit-bg: rgba(217, 45, 45, 0.10);
+
+  --radius-lg: 18px;
+  --radius-md: 13px;
+  --radius-sm: 9px;
+  --radius-pill: 9999px;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
   --bg-canvas: #07090E;
-  
-  /* Luminous Frosted Glass Surfaces */
-  --bg-glass-base: rgba(255, 255, 255, 0.07);
-  --bg-glass-elevated: rgba(255, 255, 255, 0.12);
-  --bg-glass-active: rgba(255, 255, 255, 0.18);
-  
+
+  --surface: #141A24;
+  --surface-grad: linear-gradient(135deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.03) 100%);
+  --surface-hover-grad: linear-gradient(135deg, rgba(255, 255, 255, 0.13) 0%, rgba(255, 255, 255, 0.05) 100%);
+  --fill-subtle: rgba(255, 255, 255, 0.08);
+  --fill-strong: rgba(255, 255, 255, 0.16);
+  --well: rgba(0, 0, 0, 0.35);
+
   --glass-border: rgba(255, 255, 255, 0.16);
   --glass-border-light: rgba(255, 255, 255, 0.32);
   --glass-border-strong: rgba(255, 255, 255, 0.45);
+  --hair: rgba(255, 255, 255, 0.16);
+  --hair-2: rgba(255, 255, 255, 0.10);
 
   --glass-inset-glow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.28);
   --glass-shadow: 0 16px 40px 0 rgba(0, 0, 0, 0.55);
@@ -36,11 +100,6 @@
   --crit: #FF453A;
   --crit-glow: rgba(255, 69, 58, 0.40);
   --crit-bg: rgba(255, 69, 58, 0.20);
-
-  --radius-lg: 20px;
-  --radius-md: 14px;
-  --radius-sm: 9px;
-  --radius-pill: 9999px;
 }
 
 * {
@@ -52,26 +111,35 @@
 body {
   background-color: var(--bg-canvas);
   color: var(--ink-primary);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Inter, sans-serif;
+  font-family: var(--font-body);
   font-size: 14.5px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
   position: relative;
   overflow-x: hidden;
-  background-image: 
+  /* Light: a whisper of signal color at the corners over porcelain. */
+  background-image:
+    radial-gradient(circle at 10% 0%, rgba(43, 89, 240, 0.07) 0%, transparent 34%),
+    radial-gradient(circle at 92% 6%, rgba(14, 156, 106, 0.06) 0%, transparent 34%),
+    radial-gradient(circle at 84% 96%, rgba(43, 89, 240, 0.05) 0%, transparent 34%);
+  background-attachment: fixed;
+  transition: background-color 0.35s ease;
+}
+
+[data-theme="dark"] body {
+  background-image:
     radial-gradient(circle at 12% 18%, rgba(41, 151, 255, 0.28) 0%, transparent 40%),
     radial-gradient(circle at 88% 22%, rgba(168, 85, 247, 0.26) 0%, transparent 45%),
     radial-gradient(circle at 50% 65%, rgba(16, 185, 129, 0.20) 0%, transparent 50%),
     radial-gradient(circle at 85% 90%, rgba(244, 63, 94, 0.22) 0%, transparent 45%),
     radial-gradient(circle at 18% 85%, rgba(6, 182, 212, 0.24) 0%, transparent 40%);
-  background-attachment: fixed;
 }
 
 code {
-  font-family: "SF Mono", Menlo, Monaco, monospace;
+  font-family: var(--font-mono);
   font-size: 0.88em;
-  background: rgba(255, 255, 255, 0.10);
+  background: var(--fill-subtle);
   border: 1px solid var(--glass-border);
   padding: 2px 6px;
   border-radius: 4px;
@@ -98,7 +166,7 @@ button {
 
 /* Frosted Glass Panes */
 .glass-panel {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.03) 100%);
+  background: var(--surface-grad);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-border);
@@ -111,8 +179,8 @@ button {
 
 .glass-panel:hover {
   border-color: var(--glass-border-strong);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.13) 0%, rgba(255, 255, 255, 0.05) 100%);
-  box-shadow: 0 20px 50px 0 rgba(0, 0, 0, 0.6), inset 0 1px 2px 0 rgba(255, 255, 255, 0.35);
+  background: var(--surface-hover-grad);
+  box-shadow: var(--glass-shadow), var(--glass-inset-glow);
 }
 
 /* Header */
@@ -122,7 +190,7 @@ button {
   justify-content: space-between;
   gap: 20px;
   padding: 16px 24px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.04) 100%);
+  background: var(--surface-grad);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-border);
@@ -163,11 +231,11 @@ button {
 }
 
 .brand-badge {
-  font-family: "SF Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.08em;
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--fill-subtle);
   border: 1px solid var(--glass-border);
   padding: 2px 8px;
   border-radius: var(--radius-pill);
@@ -190,7 +258,7 @@ button {
 .segmented-control {
   display: inline-flex;
   padding: 3px;
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--well);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-pill);
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4);
@@ -209,10 +277,10 @@ button {
 }
 
 .segment-btn.active {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.10) 100%);
-  color: #FFFFFF;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.35);
+  background: var(--surface);
+  color: var(--ink-primary);
+  border: 1px solid var(--glass-border-strong);
+  box-shadow: 0 1px 3px rgba(15, 27, 45, 0.12);
   font-weight: 600;
 }
 
@@ -221,7 +289,7 @@ button {
   align-items: center;
   gap: 6px;
   padding: 8px 15px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--fill-subtle);
   border: 1px solid var(--glass-border);
   border-top: 1px solid var(--glass-border-light);
   border-radius: var(--radius-pill);
@@ -232,7 +300,7 @@ button {
 }
 
 .btn-header-tool:hover {
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--fill-strong);
   border-color: var(--glass-border-strong);
   transform: translateY(-1px);
 }
@@ -326,7 +394,7 @@ button {
 
 .section-eyebrow {
   display: block;
-  font-family: "SF Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.14em;
@@ -342,10 +410,10 @@ button {
 }
 
 .model-chip {
-  font-family: "SF Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   color: var(--ink-secondary);
-  background: rgba(255, 255, 255, 0.10);
+  background: var(--fill-subtle);
   border: 1px solid var(--glass-border);
   padding: 2px 8px;
   border-radius: var(--radius-pill);
@@ -355,7 +423,7 @@ button {
   font-size: 11px;
   font-weight: 600;
   color: var(--ink-secondary);
-  background: rgba(255, 255, 255, 0.10);
+  background: var(--fill-subtle);
   border: 1px solid var(--glass-border);
   padding: 2px 9px;
   border-radius: var(--radius-pill);
@@ -488,7 +556,7 @@ button {
 
 .verdict-pill {
   display: inline-block;
-  font-family: "SF Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -502,8 +570,8 @@ button {
 .pill-safe { background: var(--safe-bg); color: var(--safe); border: 1px solid rgba(48, 209, 88, 0.4); }
 .pill-watch, .pill-verify { background: var(--watch-bg); color: var(--watch); border: 1px solid rgba(255, 159, 10, 0.4); }
 .pill-hold { background: var(--crit-bg); color: var(--crit); border: 1px solid rgba(255, 69, 58, 0.4); }
-.pill-abstain { background: rgba(255, 255, 255, 0.10); color: var(--ink-tertiary); border: 1px solid var(--glass-border); }
-.pill-idle { background: rgba(255, 255, 255, 0.06); color: var(--ink-tertiary); border: 1px solid var(--glass-border); }
+.pill-abstain { background: var(--fill-subtle); color: var(--ink-tertiary); border: 1px solid var(--glass-border); }
+.pill-idle { background: var(--fill-subtle); color: var(--ink-tertiary); border: 1px solid var(--glass-border); }
 .pill-listening { background: rgba(100, 210, 255, 0.12); color: var(--accent-cyan); border: 1px solid rgba(100, 210, 255, 0.35); }
 
 .verdict-title-lg {
@@ -570,7 +638,7 @@ button {
   font-size: 11.5px;
   color: var(--ink-tertiary);
   padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--fill-subtle);
   border-radius: var(--radius-md);
   border: 1px dashed var(--glass-border);
 }
@@ -589,7 +657,7 @@ button {
 }
 
 .sub-lbl {
-  font-family: "SF Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -626,7 +694,7 @@ button {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-family: "SF Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 9.5px;
   letter-spacing: 0.1em;
   color: var(--ink-tertiary);
@@ -643,14 +711,14 @@ button {
   font-size: 10.5px;
   font-weight: 600;
   color: var(--ink-secondary);
-  background: rgba(255, 255, 255, 0.10);
+  background: var(--fill-subtle);
   border: 1px solid var(--glass-border);
   padding: 2px 8px;
   border-radius: var(--radius-pill);
 }
 
 .virtual-card {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 100%);
+  background: var(--surface-grad);
   border: 1px solid var(--glass-border-light);
   border-radius: var(--radius-md);
   padding: 18px 20px;
@@ -711,7 +779,7 @@ button {
 }
 
 .vcard-value.mono {
-  font-family: "SF Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
 }
 
@@ -719,7 +787,7 @@ button {
   font-size: 1.35rem;
   font-weight: 700;
   letter-spacing: -0.02em;
-  color: #FFFFFF;
+  color: var(--ink-primary);
   font-variant-numeric: tabular-nums;
 }
 
@@ -818,7 +886,7 @@ button {
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--fill-subtle);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
   font-size: 12.5px;
@@ -827,7 +895,7 @@ button {
 }
 
 .btn-override-option:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--fill-strong);
   border-color: var(--accent-cyan);
   color: var(--accent-cyan);
 }
@@ -837,7 +905,7 @@ button {
   align-items: center;
   gap: 6px;
   margin-top: 12px;
-  font-family: "SF Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--safe);
 }
@@ -863,13 +931,13 @@ button {
 }
 
 .live-badge {
-  font-family: "SF Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.08em;
   padding: 2px 7px;
   border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.10);
+  background: var(--fill-subtle);
   color: var(--ink-tertiary);
   border: 1px solid var(--glass-border);
 }
@@ -881,7 +949,7 @@ button {
 }
 
 .wave-spec, .wave-cutoff-note {
-  font-family: "SF Mono", monospace;
+  font-family: var(--font-mono);
   color: var(--ink-tertiary);
   font-size: 10.5px;
 }
@@ -890,7 +958,7 @@ button {
   width: 100%;
   height: 72px;
   border-radius: var(--radius-sm);
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--well);
   border: 1px solid var(--glass-border);
 }
 
@@ -901,7 +969,7 @@ button {
   gap: 16px;
   flex-wrap: wrap;
   padding: 0 4px;
-  font-family: "SF Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--ink-secondary);
 }
@@ -965,7 +1033,7 @@ button {
 }
 
 .reason-weight-val {
-  font-family: "SF Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--ink-tertiary);
   flex: none;
@@ -973,7 +1041,7 @@ button {
 
 .reason-track {
   height: 5px;
-  background: rgba(255, 255, 255, 0.10);
+  background: var(--fill-subtle);
   border-radius: var(--radius-pill);
   overflow: hidden;
 }
@@ -985,7 +1053,7 @@ button {
 }
 
 .reason-code-badge {
-  font-family: "SF Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 9.5px;
   letter-spacing: 0.06em;
   color: var(--ink-tertiary);
@@ -1013,9 +1081,9 @@ button {
 }
 
 .det-chip {
-  font-family: "SF Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 10.5px;
-  background: rgba(255, 255, 255, 0.09);
+  background: var(--fill-subtle);
   border: 1px solid var(--glass-border);
   padding: 3px 9px;
   border-radius: var(--radius-pill);
@@ -1040,7 +1108,7 @@ button {
 .timeline-container {
   height: 84px;
   padding: 6px;
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--well);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
   margin-bottom: 10px;
@@ -1070,7 +1138,7 @@ button {
   display: flex;
   gap: 14px;
   flex-wrap: wrap;
-  font-family: "SF Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   color: var(--ink-tertiary);
 }
@@ -1104,7 +1172,7 @@ button {
 .alert-item-card {
   padding: 10px 14px;
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--fill-subtle);
   border: 1px solid var(--glass-border);
   display: flex;
   flex-direction: column;
@@ -1130,7 +1198,7 @@ button {
 }
 
 .alert-band-chip {
-  font-family: "SF Mono", monospace;
+  font-family: var(--font-mono);
   font-weight: 700;
   font-size: 9.5px;
   padding: 1px 6px;
@@ -1148,7 +1216,7 @@ button {
 .alert-time {
   margin-left: auto;
   color: var(--ink-tertiary);
-  font-family: "SF Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 .alert-recommendation {
@@ -1212,7 +1280,7 @@ button {
 .analyzer-spinner {
   width: 24px;
   height: 24px;
-  border: 3px solid rgba(255, 255, 255, 0.2);
+  border: 3px solid var(--fill-strong);
   border-top-color: var(--accent-cyan);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
@@ -1234,7 +1302,7 @@ button {
   display: flex;
   flex-direction: column;
   padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--fill-subtle);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
 }
@@ -1262,7 +1330,7 @@ button {
 
 .summary-badge {
   display: inline-block;
-  font-family: "SF Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 10.5px;
   font-weight: 700;
   padding: 2px 7px;
@@ -1274,10 +1342,10 @@ button {
 .summary-badge.band-safe { background: var(--safe-bg); color: var(--safe); }
 .summary-badge.band-watch, .summary-badge.band-verify { background: var(--watch-bg); color: var(--watch); }
 .summary-badge.band-hold { background: var(--crit-bg); color: var(--crit); }
-.summary-badge.band-abstain { background: rgba(255, 255, 255, 0.10); color: var(--ink-tertiary); }
+.summary-badge.band-abstain { background: var(--fill-subtle); color: var(--ink-tertiary); }
 
 .file-timeline-wrapper {
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--well);
   border: 1px solid var(--glass-border);
   padding: 14px;
   border-radius: var(--radius-md);
@@ -1340,7 +1408,7 @@ button {
 .glass-modal {
   width: 100%;
   max-width: 540px;
-  background: linear-gradient(135deg, rgba(30, 35, 48, 0.88) 0%, rgba(15, 18, 25, 0.94) 100%);
+  background: var(--surface);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-border-light);
@@ -1413,8 +1481,8 @@ button {
 }
 
 .btn-close:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: white;
+  background: var(--fill-strong);
+  color: var(--ink-primary);
 }
 
 .modal-tabs {
@@ -1433,7 +1501,7 @@ button {
 }
 
 .tab-btn.active {
-  color: white;
+  color: var(--ink-primary);
   border-bottom-color: var(--accent-cyan);
   font-weight: 600;
 }
@@ -1462,7 +1530,7 @@ button {
 }
 
 .value-preview {
-  font-family: "SF Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 600;
   color: var(--accent-cyan);
@@ -1477,7 +1545,7 @@ button {
 .range-ticks {
   display: flex;
   justify-content: space-between;
-  font-family: "SF Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   color: var(--ink-tertiary);
 }
@@ -1485,9 +1553,9 @@ button {
 .apple-select {
   padding: 9px 12px;
   border-radius: var(--radius-sm);
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--well);
   border: 1px solid var(--glass-border);
-  color: white;
+  color: var(--ink-primary);
   font: inherit;
   font-size: 13px;
   outline: none;
@@ -1524,12 +1592,12 @@ button {
 
 .btn-secondary {
   padding: 8px 18px;
-  background: rgba(255, 255, 255, 0.10);
+  background: var(--fill-subtle);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-pill);
   font-weight: 500;
   font-size: 13px;
-  color: white;
+  color: var(--ink-primary);
 }
 
 .btn-ghost-sm {
@@ -1540,8 +1608,8 @@ button {
 }
 
 .btn-ghost-sm:hover {
-  color: white;
-  background: rgba(255, 255, 255, 0.12);
+  color: var(--ink-primary);
+  background: var(--fill-strong);
 }
 
 .btn-ghost-sm.full-width {
@@ -1563,7 +1631,7 @@ button {
 .apple-table th {
   text-align: left;
   padding: 10px 12px;
-  font-family: "SF Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -1578,7 +1646,7 @@ button {
 }
 
 .status-pill {
-  font-family: "SF Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 700;
   padding: 2px 7px;
@@ -1588,15 +1656,15 @@ button {
 .badge-safe { background: var(--safe-bg); color: var(--safe); }
 .badge-watch, .badge-verify { background: var(--watch-bg); color: var(--watch); }
 .badge-hold { background: var(--crit-bg); color: var(--crit); }
-.badge-neutral { background: rgba(255, 255, 255, 0.10); color: var(--ink-tertiary); }
+.badge-neutral { background: var(--fill-subtle); color: var(--ink-tertiary); }
 
 .risk-pill {
   font-weight: 600;
-  color: white;
+  color: var(--ink-primary);
 }
 
 .kind-tag {
-  font-family: "SF Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 10.5px;
   font-weight: 600;
   color: var(--accent-cyan);
@@ -1631,7 +1699,7 @@ button {
   align-items: center;
   padding-top: 20px;
   border-top: 1px solid var(--glass-border);
-  font-family: "SF Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--ink-tertiary);
   flex-wrap: wrap;
@@ -1642,4 +1710,66 @@ button {
   display: flex;
   align-items: center;
   gap: 14px;
+}
+
+/* ==========================================================================
+   Redesign layer — type identity, theme toggle, accessibility floor.
+   ========================================================================== */
+
+/* Display face (Archivo) carries the headline + the numbers that matter.
+   Body stays IBM Plex Sans; data stays IBM Plex Mono. */
+.brand-title,
+.card-title,
+.gauge-number,
+.verdict-title-lg,
+.verdict-headline-lg,
+.verdict-headline,
+.vcard-amount,
+.summary-value.risk-val,
+.dropzone-text h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+.gauge-number { letter-spacing: -0.05em; }
+.brand-title { letter-spacing: -0.035em; }
+
+/* Segmented control: recessed track reads better in light. */
+.segmented-control { box-shadow: inset 0 1px 2px rgba(15, 27, 45, 0.06); }
+[data-theme="dark"] .segmented-control { box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4); }
+
+/* Theme toggle — a compact sun/moon switch that lives in the header actions. */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-pill);
+  background: var(--fill-subtle);
+  border: 1px solid var(--glass-border);
+  color: var(--ink-secondary);
+  flex: none;
+}
+.theme-toggle:hover {
+  background: var(--fill-strong);
+  color: var(--ink-primary);
+  border-color: var(--glass-border-strong);
+  transform: translateY(-1px);
+}
+.theme-toggle:active { transform: translateY(0); }
+.theme-toggle svg { display: block; }
+
+/* Accessibility floor: visible keyboard focus, honored reduced motion. */
+:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

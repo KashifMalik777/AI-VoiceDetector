@@ -26,6 +26,8 @@ attacks/refs_demo_only/
 frontend-legacy/
 *.tsbuildinfo
 *.zip
+*.log
+scripts/*.log
 
 # --- keep these: they are evidence, not build junk ---
 !data/results.json

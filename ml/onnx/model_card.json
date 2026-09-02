@@ -9,6 +9,6 @@
   "trained": true,
   "note": "Trained head -- detector participates in verdicts.",
   "threads": 8,
-  "onnx_ms_mean": 2776.0,
+  "onnx_ms_mean": 3412.4,
   "expected_ood_eer": 8.4
 }

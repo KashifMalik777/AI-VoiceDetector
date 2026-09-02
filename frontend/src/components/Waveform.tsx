@@ -25,8 +25,13 @@ export default function Waveform({ levels, live }: WaveformProps) {
     ctx.scale(dpr, dpr)
     ctx.clearRect(0, 0, width, height)
 
-    // Center guideline
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.07)'
+    // Pull live colors from the theme tokens so the scope matches light/dark.
+    const cs = getComputedStyle(document.documentElement)
+    const accent = cs.getPropertyValue('--accent-cyan').trim() || '#2B59F0'
+    const safe = cs.getPropertyValue('--safe').trim() || '#0C9C6A'
+
+    // Center guideline — a neutral hairline that reads on either ground.
+    ctx.strokeStyle = 'rgba(128, 146, 170, 0.28)'
     ctx.lineWidth = 1
     ctx.beginPath()
     ctx.moveTo(0, height / 2)
@@ -37,11 +42,10 @@ export default function Waveform({ levels, live }: WaveformProps) {
     const barWidth = width / n
     const gap = 1.5
 
-    // Gradient fill for waveform
+    // Signal gradient: safe-green through the accent — the product's own colors.
     const gradient = ctx.createLinearGradient(0, 0, 0, height)
-    gradient.addColorStop(0, '#4CD0D4')
-    gradient.addColorStop(0.5, '#0A6E7C')
-    gradient.addColorStop(1, '#054A54')
+    gradient.addColorStop(0, accent)
+    gradient.addColorStop(1, safe)
 
     ctx.fillStyle = gradient
 

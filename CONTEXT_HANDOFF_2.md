@@ -8,9 +8,9 @@
 ## 0. TL;DR — current state
 
 - The neural detector is **trained** (no longer a stub). Head weights live in `ml/onnx/probe_head.npz`.
-- **Headline benchmark:** EER **0.61%** on a language-matched (English + Hindi), speaker-disjoint test (104 speakers, 9 generators).
-- **Unseen-generator (leave-one-generator-out):** 0.42% on a familiar TTS family, **17.1%** on a never-seen cross-lingual voice-conversion model — the honest generalization gap.
-- **Robustness:** rock-solid on telephony/codec channels (AMR-NB 100%, MP3@16k 92%), weak on heavy reverb/noise (17–46%) — the field's known-hard conditions.
+- **Deployed model is the augmentation-hardened "v4" head** (§5b). Headline benchmark: EER **0.75%** on a language-matched (English + Hindi), speaker-disjoint test (104 speakers, 9 generators). The pre-augmentation head scored 0.61%; the 0.14-point trade buys large reverb/noise robustness gains.
+- **Unseen-generator (leave-one-generator-out):** 0.42% / **17.1%** figures below were measured on the *pre-augmentation* head; not yet re-run on v4 (open item).
+- **Robustness:** rock-solid on telephony/codec channels (AMR-NB 100%, MP3@16k 92%). Heavy reverb/noise were the weak spots (12–18% reverb recall); **augmentation training roughly tripled reverb recall and dropped denoising false-positives below the clean-head baseline** (§5b).
 - **Real-time:** RTF 0.167, ~670 ms per 4 s window, +331 ms headroom on an RTX 4060 laptop.
 - The live system flags fakes (WATCH+) and keeps real speech SAFE (no false positives) on the file lab.
 
@@ -94,6 +94,8 @@ Writes `ml/onnx/probe_head.npz` (the trained head) and `data/probe_results.json`
 
 The small actDCF–minDCF gap means the scores are **well-calibrated**, not just separable.
 
+> These are the **pre-augmentation** head (session 2). The **deployed** model is the augmentation-hardened v4 — seen-generator EER **0.75%** — see §5b and §0.
+
 ### Robustness (`data/robustness_results.json`)
 
 Spoof-detection recall of the trained model on 52 held fakes, per degradation (`caught` = P(fake) > 0.5):
@@ -120,6 +122,37 @@ New files: `scripts/prep_datasets.py`, `scripts/prep_asvspoof.py`, `scripts/prep
 
 ---
 
+## 5b. Augmentation retrain — the deployed "v4" head (session 3)
+
+The reverb/noise gap was the top ML open item. It is now closed by **training through the
+degradations**: `ml/training/train_probe.py --augment` runs an extra pass over the
+**training windows only** (speaker-disjoint test windows stay clean — no leakage),
+degrading each with a random pick from a pool of reverb (RT60 0.4/0.6/0.9 s), additive
+noise (0/3/5/10 dB), and a Krisp/Teams-class noise-suppression simulation. The
+noise-suppression augmentation is the direct fix for real speech being flagged fake under
+aggressive denoising. `scripts/eval_robustness.py` measures spoof recall per condition on
+the held-out fake speakers (seed-0 25% holdout) — reproducibly, comparable before/after.
+
+**Before (clean head) → after (deployed v4), from `eval_robustness.py`:**
+
+| Condition | Clean head | **v4 (deployed)** |
+|---|---|---|
+| clean fakes | 96% | 91% |
+| reverb RT60 0.9 s | 13% | **39%** |
+| reverb RT60 0.4 s | 18% | **44%** |
+| noise 0 dB | 68% | **56%** |
+| noise 10 dB | 72% | **82%** |
+| real speech → noise-suppression **false-positive** | 8.7% | **6.7%** |
+| seen-generator EER | 0.61% | **0.75%** |
+
+Net: reverb recall roughly tripled, denoising false-positives fell *below* the clean-head
+baseline, and the seen-generator EER barely moved (0.61 → 0.75%). The tradeoff cost is clean
+fake recall (96 → 91%) and 0 dB noise (an unrealistic "noise as loud as speech" condition).
+The pool was tuned across four runs (v1–v4); v1 over-augmented and raised false-positives —
+v4 balances reverb, low-SNR noise, and denoising invariance. To reproduce, add `--augment`
+to the training command in §4. Backups of the clean head live in `ml/onnx/probe_head_clean.npz`;
+the augmented head is also archived as `ml/onnx/probe_head_aug.npz`.
+
 ## 6. Run the app
 
 ```powershell
@@ -141,7 +174,7 @@ Open http://localhost:5173 (must be `localhost`, not a LAN IP, or the mic is blo
 ## 7. Open items / next steps
 
 **Highest value (ML):**
-- **Augmentation retrain** to close the reverb/noise robustness gap — run `attacks/laundering.py` as augmentation over the training set (held-out-speaker-clean to avoid leakage), retrain, re-measure.
+- ~~Augmentation retrain to close the reverb/noise gap~~ — **DONE & deployed as v4** (see §5b). `train_probe.py --augment`. Remaining: re-measure leave-one-generator-out on the v4 head (the 0.42%/17.1% numbers are pre-augmentation).
 - Add the **vits** Hindi generator (only freevc24 + xtts_v2 were pulled) for more generator diversity.
 - Fold in more ASVspoof systems / a larger subset for a stronger English number.
 
@@ -153,3 +186,24 @@ Open http://localhost:5173 (must be `localhost`, not a LAN IP, or the mic is blo
 **Housekeeping:**
 - The ONNX weights and all dataset/audio files are gitignored — teammates regenerate them with the scripts above.
 - If you re-run ASVspoof download, set `KAGGLE_API_TOKEN` in the env; never commit it.
+
+---
+
+## 8. Session 3 changelog (frontend, latency, deploy)
+
+**Model deploy**
+- The augmentation-hardened **v4** head is now the live model (§5b). ONNX re-exported from it (`trained: true`). Backups: `probe_head_clean.npz` (original 0.61% EER), `probe_head_aug.npz` (= v4). Restart the backend to serve a new head.
+
+**Live-mic latency fixes** (`frontend/public/pcm-worklet.js`, `frontend/src/lib/useCall.ts`, `backend/ws_hub.py`)
+- The capture worklet emitted audio to the UI only once per second, so the level meter looked dead between updates. It now emits a level tick every ~20 ms (the 1 s PCM frame for the detector is unchanged), so the meter reacts to the mic in real time.
+- The per-hop SQLite frame write sat between scoring and sending. The verdict is now sent first and the frame persisted on the thread pool afterward, removing the DB commit from the response path.
+
+**Verdict flicker fix** (`frontend/src/components/RiskMeter.tsx`)
+- The meter reverted to "listening" on any single ABSTAIN window, so a verdict flashed for ~1 s then vanished while the caller kept talking (the gate alternates SCORED/ABSTAIN around the net-speech floor). The meter now holds the last verdict for up to 6 s through brief abstains; sustained silence still falls back to "waiting for speech".
+
+**Frontend redesign** (`frontend/src/styles.css`, `index.html`, `components/ThemeToggle.tsx`)
+- Rebuilt the stylesheet as a token system: **light is the default theme**, dark is an override under `[data-theme="dark"]`. A header **theme toggle** persists the choice in `localStorage`; a pre-paint script in `index.html` applies it before first paint (no flash).
+- New identity: porcelain canvas, white forensic panels, an indigo→cyan signal accent, Archivo display / IBM Plex Sans body / IBM Plex Mono data. The live waveform reads its colors from the theme.
+- Removed the header logo mark (kept the "SatyaVaani" wordmark). Fixed undefined `--hair`/`--hair-2` tokens (the radial-gauge track ring was invisible). Reworded the on-screen "Zero-False-Positive Guarantee" to an honest evidence-gate description.
+
+**Metric fix carried from session 2**: `ml/fusion/calibrate.py` `eer()` was inverted; corrected (label 1 = spoof, higher = more spoof).

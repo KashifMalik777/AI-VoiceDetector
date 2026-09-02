@@ -1,8 +1,8 @@
 {
-  "trained_at": "2026-09-01T10:31:40",
+  "trained_at": "2026-09-01T06:24:17",
   "layers_kept": 7,
   "head_params": 2050,
-  "windows_train": 4590,
+  "windows_train": 2295,
   "windows_test": 499,
   "speakers": [
     "hin",
@@ -124,13 +124,11 @@
   "test_speaker": "spk977",
   "holdout_generator": null,
   "speaker_disjoint": true,
-  "augmented": true,
-  "aug_passes": 1,
   "metrics": {
-    "eer": 0.75,
-    "min_dcf": 0.0148,
-    "act_dcf": 0.1328,
-    "c_llr": 0.2222,
-    "far_at_1_frr": 0.62
+    "eer": 0.61,
+    "min_dcf": 0.0059,
+    "act_dcf": 0.059,
+    "c_llr": 0.1783,
+    "far_at_1_frr": 0.0
   }
 }
